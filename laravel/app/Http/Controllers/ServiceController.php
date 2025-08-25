@@ -133,9 +133,82 @@ class ServiceController extends Controller
     public function update(ServiceUpdateRequest $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
-        $svc = Service::where('store_id',$storeId)->findOrFail($id);
-        $svc->update($r->validated());
-        return new ServiceResource($svc->load(['customers:id,name,phone','user:id,name']));
+
+        $svc = Service::where('store_id', $storeId)->findOrFail($id);
+
+        // Lấy dữ liệu hợp lệ từ Request
+        $data = $r->validated();
+
+        // ❌ Không cho cập nhật debt khi edit
+        unset($data['debt']);
+
+        // ❌ Không cho cập nhật store_id từ client
+        unset($data['store_id']);
+
+        // Chuẩn hoá số
+        foreach (['service_price', 'expense', 'warranty'] as $numField) {
+            if (array_key_exists($numField, $data) && $data[$numField] !== null) {
+                $data[$numField] = (int) $data[$numField];
+            }
+        }
+
+        // Chuẩn hoá ngày service_date -> YYYY-MM-DD (chịu nhiều định dạng)
+        if (!empty($data['service_date'])) {
+            try {
+                // Carbon::parse chấp nhiều format/ISO; nếu muốn strict hơn thì tự parse format cụ thể
+                $data['service_date'] = Carbon::parse($data['service_date'])->toDateString();
+            } catch (\Throwable $e) {
+                // nếu parse fail, có thể giữ nguyên hoặc fallback về hôm nay
+                $data['service_date'] = Carbon::now()->toDateString();
+            }
+        }
+
+        // Xử lý khách hàng (nếu client gửi customer_id thì ưu tiên; nếu gửi name/phone thì find-or-create)
+        DB::transaction(function () use ($r, $storeId, $svc, &$data) {
+            $customerId = $data['customer_id'] ?? null;
+
+            // Nếu chưa có customer_id, thử lấy từ name/phone
+            if (!$customerId) {
+                $name  = trim((string) $r->input('customer_name', ''));
+                $phone = trim((string) $r->input('phone_number', ''));
+
+                if ($name !== '' || $phone !== '') {
+                    // tìm theo phone trước (độc nhất hơn), rơi về name nếu cần
+                    $customer = Customer::where('store_id', $storeId)
+                        ->when($phone !== '', fn($q) => $q->where('phone', $phone))
+                        ->when($phone === '' && $name !== '', fn($q) => $q->where('name', $name))
+                        ->first();
+
+                    if (!$customer) {
+                        $customer = Customer::create([
+                            'store_id' => $storeId,
+                            'name'     => $name !== '' ? $name : 'Khách lẻ',
+                            'phone'    => $phone !== '' ? $phone : null,
+                        ]);
+                    }
+
+                    $data['customer_id'] = $customer->id;
+                }
+            }
+
+            // Không lưu các trường chỉ dùng để nhập liệu
+            unset($data['customer_name'], $data['phone_number']);
+
+            // (tuỳ chọn) cập nhật user thực hiện sửa
+            if ($r->user()) {
+                $data['user_id'] = $r->user()->id;
+            }
+
+            $svc->update($data);
+        });
+
+        // Đổi 'customers' -> 'customer' nếu quan hệ của bạn đặt tên số ít (khuyên dùng)
+        return new ServiceResource(
+            $svc->fresh()->load([
+                'customer:id,name,phone', // hoặc 'customers:id,name,phone' nếu bạn đang đặt lạ
+                'user:id,name',
+            ])
+        );
     }
 
     public function destroy(Request $r, $id)

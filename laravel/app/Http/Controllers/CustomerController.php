@@ -14,23 +14,53 @@ class CustomerController extends Controller
     public function index(Request $r)
     {
         $storeId = $this->resolveStoreId($r);
-        $q = Customer::where('store_id', $storeId);
+        $q = Customer::query()->where('store_id', $storeId);
 
-        if ($s = trim((string)$r->input('q'))) {
-            $q->where(fn($w)=>$w->where('name','like',"%{$s}%")->orWhere('phone','like',"%{$s}%"));
+        // Nhận nhiều key tìm kiếm cho linh hoạt FE
+        $term = trim((string) ($r->input('q') ?? $r->input('search') ?? $r->input('term') ?? ''));
+
+        // Lọc theo từ khoá (name/phone)
+        if ($term !== '') {
+            // escape ký tự wildcard nếu cần
+            $like = str_replace(['%', '_'], ['\%', '\_'], $term);
+            $q->where(function ($w) use ($like) {
+                $w->where('name', 'like', "%{$like}%")
+                ->orWhere('phone', 'like', "%{$like}%");
+            });
         }
-        if ($r->filled('debt_min')) $q->where('debt','>=',(float)$r->input('debt_min'));
-        if ($r->filled('debt_max')) $q->where('debt','<=',(float)$r->input('debt_max'));
 
-        if ($f = $r->input('date_from')) $q->whereDate('created_at','>=',$f);
-        if ($t = $r->input('date_to'))   $q->whereDate('created_at','<=',$t);
+        // Lọc theo nợ
+        if ($r->filled('debt_min')) $q->where('debt', '>=', (float) $r->input('debt_min'));
+        if ($r->filled('debt_max')) $q->where('debt', '<=', (float) $r->input('debt_max'));
 
-        $sortable = ['id','name','phone','debt','created_at'];
-        $sortBy = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
-        $sortDir = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
+        // Lọc theo ngày tạo
+        if ($f = $r->input('date_from')) $q->whereDate('created_at', '>=', $f);
+        if ($t = $r->input('date_to'))   $q->whereDate('created_at', '<=', $t);
+
+        // Sắp xếp
+        $sortable = ['id', 'name', 'phone', 'debt', 'created_at'];
+        $sortBy   = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
+        $sortDir  = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
         $q->orderBy($sortBy, $sortDir);
 
-        $perPage = max(1, min((int)$r->input('perPage', 15), 200));
+        // Nếu có 'limit' (AutoComplete) -> trả list rút gọn, KHÔNG paginate
+        if ($r->filled('limit')) {
+            $limit = max(1, min((int) $r->input('limit'), 50));
+
+            // Nếu không có term mà FE vẫn ping autocomplete -> trả rỗng cho nhẹ
+            if ($term === '') {
+                return CustomerResource::collection(collect());
+            }
+
+            // Chỉ chọn các cột cần thiết cho gợi ý
+            $rows = $q->limit($limit)
+                    ->get(['id', 'name', 'phone', 'debt', 'created_at']);
+
+            return CustomerResource::collection($rows);
+        }
+
+        // Mặc định: phân trang cho trang danh sách
+        $perPage = max(1, min((int) $r->input('perPage', 15), 200));
         return CustomerResource::collection($q->paginate($perPage));
     }
 

@@ -2,8 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import MainLayout from "../components/layout/MainLayout";
 import { Row, Col, Button, Space, Popconfirm, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
-import { PlusOutlined } from "@ant-design/icons";
-import dayjs from "dayjs";
+import dayjs from 'dayjs';
 import api from "../../axiosConfig";
 import { useModalStore } from "../store/modalStore";
 import PageTable from "@/components/shared/PageTable";
@@ -20,21 +19,32 @@ type Service = {
   note?: string | null;    // Ghi chú
 };
 
-const fVND = (n: number) =>
-  new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(n);
+
+const normalizeService = (r: any) => ({
+  id: Number(r.id),
+  name: r.service_name ?? r.name ?? "",
+  price: Number(r.service_price ?? r.price ?? 0),
+  customerName: r.customer?.name ?? r.customer_name ?? r.customerName ?? "",
+  phone: r.customer?.phone ?? r.phone ?? r.phone_number ?? null,
+  cost: Number(r.expense ?? r.cost ?? 0),
+  date: r.service_date ?? r.date ?? r.created_at ?? "",
+  warranty: warrantyLabel(r.warranty ?? r.warranty_months ?? r.warranty_month ?? 0),
+  note: r.note ?? r.service_note ?? r.description ?? null,
+});
+
 
 const matchKw = (row: any, kw: string) => {
   const hay = [
     row.name,
+    row.customerName,
+    row.phone,
     row.price,
-    row.customer?.name,
-    row.customer?.phone,
     row.cost,
     row.date,
     row.warranty,
     row.note,
   ]
-    .filter(Boolean)
+    .filter((v) => v !== undefined && v !== null && String(v).trim() !== "")
     .join(" ")
     .toLowerCase();
   return hay.includes(kw);
@@ -61,18 +71,21 @@ const Services: React.FC = () => {
     try {
       setLoading(true);
       const res = await api.get("/services");
-      const list = Array.isArray(res.data?.data)
-        ? res.data
-        : Array.isArray(res.data?.data)
-        ? res.data.data
-        : [];
+
+      // chấp mọi kiểu payload phổ biến: [], {data:[]}, {result:[]}
+      let raw: any[] = [];
+      const d = res.data;
+      if (Array.isArray(d)) raw = d;
+      else if (Array.isArray(d?.data)) raw = d.data;
+      else if (Array.isArray(d?.result)) raw = d.result;
+      else raw = [];
+
+      const list = raw.map(normalizeService);
+
       setAllRaw(list);
-      if (keyword?.trim()) {
-        const kw = keyword.toLowerCase();
-        setRows(list.filter((r: any) => matchKw(r, kw)));
-      } else {
-        setRows(list);
-      }
+
+      const kw = (keyword ?? "").trim().toLowerCase();
+      setRows(kw ? list.filter((r: any) => matchKw(r, kw)) : list);
     } catch (e: any) {
       console.error(e);
       message.error(e?.response?.data?.message || "Không tải được dữ liệu Service");
@@ -119,13 +132,13 @@ const Services: React.FC = () => {
           title: "Tiền thu khách",
           dataIndex: "price",
           key: "price",
-          render: (price: number) => fVND(price),
+          render: (price: number) => currency(price),
         },
         {
           title: "Chi phí",
           dataIndex: "cost",
           key: "cost",
-          render: (cost: number) => fVND(cost),
+          render: (cost: number) => currency(cost),
         },
         {
           title: "Ngày tháng",
@@ -167,43 +180,6 @@ const Services: React.FC = () => {
 
 
 
-  const mapApiToRow = (it: any): Service => {
-    // tuỳ API: chuẩn hoá các field
-    const customer = it.customer || {};
-    const price = Number(it.price ?? it.service_price ?? 0);
-    const expense = Number(it.expense ?? it.cost ?? 0);
-    const debt = Number(it.debt ?? 0);
-    const date =
-      it.service_date ||
-      it.export_date ||
-      it.sale_date ||
-      it.date ||
-      it.created_at ||
-      "";
-    const wMonths =
-      it.warranty_months ?? it.warranty ?? (typeof it.warranty === "number" ? it.warranty : 0);
-
-    return {
-      id: Number(it.id),
-      name: String(it.name ?? it.service_name ?? ""),
-      price,
-      customerName: String(
-        it.customer_name ?? customer.name ?? it.customerName ?? ""
-      ),
-      phone:
-        it.phone_number ??
-        customer.phone_number ??
-        customer.phone ??
-        it.phone ??
-        null,
-      cost: expense,
-      date,
-      warranty: warrantyLabel(Number(wMonths)),
-      note: it.note ?? null,
-    };
-  };
-
-
 return (
     <MainLayout>
       <Row gutter={16}>
@@ -217,15 +193,6 @@ return (
             loading={loading}
             onSearch={handleSearch}
             scrollX="max-content"
-            extra={
-              <Button
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() => openService(false, null)}
-              >
-                Thêm dịch vụ
-              </Button>
-            }
           />
         </Col>
       </Row>

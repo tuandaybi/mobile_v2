@@ -29,6 +29,27 @@ const parseNumber = ((v?: string) => {
   return s ? Number(s) : undefined;
 }) as any;
 
+const parseServiceDate = (v?: unknown): Dayjs => {
+  if (!v) return dayjs();
+  if (dayjs.isDayjs(v)) return v as Dayjs;
+
+  const s = String(v).trim();
+  const formats = [
+    'YYYY-MM-DD',
+    'YYYY/MM/DD',
+    'YYYY-MM-DD HH:mm:ss',
+    'YYYY/MM/DD HH:mm:ss',
+    'DD/MM/YYYY',
+    'DD-MM-YYYY',
+  ];
+  for (const f of formats) {
+    const d = dayjs(s, f, true);      // strict
+    if (d.isValid()) return d;
+  }
+  const loose = dayjs(s);             // fallback “thoáng”
+  return loose.isValid() ? loose : dayjs();
+};
+
 const toYMD = (v?: Dayjs | string | null) =>
   v ? (dayjs.isDayjs(v) ? v.format('YYYY-MM-DD') : dayjs(v).format('YYYY-MM-DD')) : null;
 
@@ -51,6 +72,7 @@ export default function ServiceModal() {
   const [suggestions, setSuggestions] = useState<CustomerRow[]>([]);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const searchTimer = useRef<number | null>(null);
+  const bumpServicesVersion = useModalStore(s => s.bumpServicesVersion);
 
   // ===== Initial values (prefill khi SỬA) =====
   const initialValues: Partial<FormValues> = useMemo(() => {
@@ -63,9 +85,9 @@ export default function ServiceModal() {
 
       service_price: Number(r.price ?? r.service_price ?? 0),
       expense: Number(r.cost ?? r.expense ?? 0),
-      debt: Number(r.debt ?? 0),
+      debt: modal.isEdit ? undefined : Number(r.debt ?? 0),
 
-      service_date: r.date ? dayjs(r.date, ['YYYY-MM-DD', 'DD/MM/YYYY'], true) : dayjs(),
+      service_date: parseServiceDate(r.service_date ?? r.date ?? ''),
       warranty: monthsFromLabel(r.warranty ?? ''),
       note: r.note ?? '',
     };
@@ -78,29 +100,6 @@ export default function ServiceModal() {
     form.setFieldsValue(initialValues as any);
   }, [modal.isOpen, modal.record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Khi mở modal & đang EDIT: lấy chi tiết để có customer_id chuẩn
-  useEffect(() => {
-    const fetchDetailIfEdit = async () => {
-      if (!modal.isOpen || !modal.isEdit || !modal.record?.id) return;
-      try {
-        const res = await api.get(`/services/${modal.record.id}`);
-        const row = res?.data?.data ?? res?.data ?? {};
-        const cust = row.customer ?? {};
-        const custId = Number(row.customer_id ?? cust.id ?? 0) || null;
-
-        form.setFieldsValue({
-          customer_id: custId,
-          customer_name: String(cust.name ?? row.customer_name ?? form.getFieldValue('customer_name') ?? ''),
-          phone_number: String(cust.phone_number ?? cust.phone ?? row.phone_number ?? form.getFieldValue('phone_number') ?? ''),
-        });
-        setIsExistingCustomer(!!custId);
-      } catch {
-        // ignore
-      }
-    };
-    fetchDetailIfEdit();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modal.isOpen, modal.isEdit, modal.record?.id]);
 
   // ===== Customer search (giống MobileModal) =====
   const fetchCustomers = async (q: string) => {
@@ -207,13 +206,15 @@ export default function ServiceModal() {
       };
 
       if (modal.isEdit && modal.record?.id) {
+        delete payload.debt; 
         await api.put(`/services/${modal.record.id}`, payload);
         message.success('Cập nhật dịch vụ thành công');
+        bumpServicesVersion();
+        modal.close?.();
       } else {
         await api.post('/services', payload);
         message.success('Thêm dịch vụ thành công');
-      }
-      modal.close?.();
+      } 
     } catch (e: any) {
       console.error(e);
       message.error(e?.response?.data?.message || 'Lỗi khi lưu dịch vụ');
@@ -256,7 +257,7 @@ export default function ServiceModal() {
 
         {/* === Khách hàng (giống MobileModal) === */}
         <Form.Item
-          label="Tên khách hàng"
+          label="Khách hàng"
           name="customer_name"
           rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
           tooltip="Gõ để tìm khách cũ; nếu trùng tên sẽ tự đổ SĐT; nếu không, hãy nhập SĐT mới"
@@ -326,16 +327,22 @@ export default function ServiceModal() {
           />
         </Form.Item>
 
-        <Form.Item label="Nợ lại" name="debt">
-          <InputNumber
-            min={0}
-            style={{ width: '100%' }}
-            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={parseNumber}
-          />
-        </Form.Item>
+        {!modal.isEdit && (
+          <Form.Item
+            label="Nợ lại"
+            name="debt"
+            preserve={false}   // ✅ khi unmount sẽ xóa value khỏi form store
+          >
+            <InputNumber
+              min={0}
+              style={{ width: '100%' }}
+              formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={parseNumber}
+            />
+          </Form.Item>
+        )}
 
-        <Form.Item label="Ngày dịch vụ" name="service_date">
+        <Form.Item label="Ngày bán" name="service_date">
           <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
         </Form.Item>
 
