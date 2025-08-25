@@ -1,0 +1,362 @@
+import { Modal, Form, Input, Select, DatePicker, Button, InputNumber, AutoComplete, Spin, message } from 'antd';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import dayjs, { Dayjs } from 'dayjs';
+import customParseFormat from 'dayjs/plugin/customParseFormat';
+import { useModalStore } from '../../store/modalStore';
+import api from '../../../axiosConfig';
+
+dayjs.extend(customParseFormat);
+
+type CustomerRow = { id: number; name: string; phone?: string | null };
+
+interface FormValues {
+  service_name: string;
+  customer_name: string;
+  customer_id?: number | null;
+  phone_number?: string;
+
+  service_price: number;
+  expense?: number;
+  debt?: number;
+
+  service_date: Dayjs;
+  warranty: number; // tháng (0..12)
+  note?: string;
+}
+
+const parseNumber = ((v?: string) => {
+  const s = String(v ?? '').replace(/,/g, '');
+  return s ? Number(s) : undefined;
+}) as any;
+
+const toYMD = (v?: Dayjs | string | null) =>
+  v ? (dayjs.isDayjs(v) ? v.format('YYYY-MM-DD') : dayjs(v).format('YYYY-MM-DD')) : null;
+
+const monthsFromLabel = (label?: string) => {
+  if (!label) return 0;
+  if (label.toLowerCase().includes('không')) return 0;
+  const m = parseInt(label.replace(/\D+/g, ''), 10);
+  return Number.isFinite(m) ? m : 0;
+};
+
+export default function ServiceModal() {
+  // ✅ lấy đúng slice service (isOpen, isEdit, record, open, close)
+  const modal = useModalStore(s => s.service);
+
+  const [form] = Form.useForm<FormValues>();
+  const [loading, setLoading] = useState(false);
+
+  // customer search state
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<CustomerRow[]>([]);
+  const [isExistingCustomer, setIsExistingCustomer] = useState(false);
+  const searchTimer = useRef<number | null>(null);
+
+  // ===== Initial values (prefill khi SỬA) =====
+  const initialValues: Partial<FormValues> = useMemo(() => {
+    const r: any = modal.record || {};
+    return {
+      service_name: r.name ?? r.service_name ?? '',
+      customer_name: r.customerName ?? r.customer_name ?? '',
+      customer_id: null, // sẽ fill bằng GET /services/{id} khi edit (nếu có)
+      phone_number: r.phone ?? r.phone_number ?? '',
+
+      service_price: Number(r.price ?? r.service_price ?? 0),
+      expense: Number(r.cost ?? r.expense ?? 0),
+      debt: Number(r.debt ?? 0),
+
+      service_date: r.date ? dayjs(r.date, ['YYYY-MM-DD', 'DD/MM/YYYY'], true) : dayjs(),
+      warranty: monthsFromLabel(r.warranty ?? ''),
+      note: r.note ?? '',
+    };
+  }, [modal.record, modal.isEdit]);
+
+  // 🔁 Hydrate form mỗi lần mở/đổi record (đảm bảo form đổ dữ liệu cũ)
+  useEffect(() => {
+    if (!modal.isOpen) return;
+    form.resetFields();
+    form.setFieldsValue(initialValues as any);
+  }, [modal.isOpen, modal.record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Khi mở modal & đang EDIT: lấy chi tiết để có customer_id chuẩn
+  useEffect(() => {
+    const fetchDetailIfEdit = async () => {
+      if (!modal.isOpen || !modal.isEdit || !modal.record?.id) return;
+      try {
+        const res = await api.get(`/services/${modal.record.id}`);
+        const row = res?.data?.data ?? res?.data ?? {};
+        const cust = row.customer ?? {};
+        const custId = Number(row.customer_id ?? cust.id ?? 0) || null;
+
+        form.setFieldsValue({
+          customer_id: custId,
+          customer_name: String(cust.name ?? row.customer_name ?? form.getFieldValue('customer_name') ?? ''),
+          phone_number: String(cust.phone_number ?? cust.phone ?? row.phone_number ?? form.getFieldValue('phone_number') ?? ''),
+        });
+        setIsExistingCustomer(!!custId);
+      } catch {
+        // ignore
+      }
+    };
+    fetchDetailIfEdit();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [modal.isOpen, modal.isEdit, modal.record?.id]);
+
+  // ===== Customer search (giống MobileModal) =====
+  const fetchCustomers = async (q: string) => {
+    try {
+      setOptionsLoading(true);
+      const res = await api.get('/admin/customers', { params: { search: q, limit: 10 } });
+      const rows: CustomerRow[] = (Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : []).map((c: any) => ({
+        id: Number(c.id),
+        name: c.name ?? c.fullname ?? c.customer_name ?? '',
+        phone: c.phone ?? c.phone_number ?? null,
+      }));
+      setSuggestions(rows);
+
+      const currentName = form.getFieldValue('customer_name')?.trim() || '';
+      if (currentName) {
+        const matched = rows.find(r => r.name.trim().toLowerCase() === currentName.toLowerCase());
+        if (matched) {
+          setIsExistingCustomer(true);
+          form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
+          return;
+        }
+      }
+      setIsExistingCustomer(false);
+      form.setFieldsValue({ customer_id: null });
+    } catch {
+      setSuggestions([]);
+    } finally {
+      setOptionsLoading(false);
+    }
+  };
+
+  const handleSearchName = (q: string) => {
+    if (searchTimer.current) {
+      window.clearTimeout(searchTimer.current);
+      searchTimer.current = null;
+    }
+    searchTimer.current = window.setTimeout(() => {
+      if (q.trim()) fetchCustomers(q.trim());
+      else {
+        setSuggestions([]);
+        setIsExistingCustomer(false);
+        form.setFieldsValue({ customer_id: null, phone_number: '' });
+      }
+    }, 350) as unknown as number;
+  };
+
+  const handleSelectName = (_value: string, option: any) => {
+    setIsExistingCustomer(true);
+    form.setFieldsValue({
+      customer_name: option.value,
+      customer_id: option.id ?? null,
+      phone_number: option.phone ?? '',
+    });
+  };
+
+  const handleChangeName = (val: string) => {
+    const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.trim().toLowerCase());
+    if (matched) {
+      setIsExistingCustomer(true);
+      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
+    } else {
+      setIsExistingCustomer(false);
+      form.setFieldsValue({ customer_id: null });
+    }
+  };
+
+  const handleBlurName = () => {
+    const val = (form.getFieldValue('customer_name') || '').trim();
+    if (!val) {
+      setIsExistingCustomer(false);
+      form.setFieldsValue({ customer_id: null, phone_number: '' });
+      return;
+    }
+    const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.toLowerCase());
+    if (matched) {
+      setIsExistingCustomer(true);
+      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
+    } else {
+      setIsExistingCustomer(false);
+      form.setFieldsValue({ customer_id: null });
+    }
+  };
+
+  // ===== Submit =====
+  const handleSubmit = async (values: FormValues) => {
+    setLoading(true);
+    try {
+      const payload: any = {
+        // service
+        name: values.service_name.trim(),
+        price: Number(values.service_price ?? 0),
+        expense: Number(values.expense ?? 0),
+        warranty: Number(values.warranty ?? 0),
+
+        // customer selection
+        customer_id: values.customer_id ?? null,
+        customer_name: values.customer_name.trim(),
+        phone_number: values.phone_number?.trim() || null,
+
+        // optional
+        debt: Number(values.debt ?? 0),
+        service_date: toYMD(values.service_date),
+        note: values.note?.trim() || null,
+      };
+
+      if (modal.isEdit && modal.record?.id) {
+        await api.put(`/services/${modal.record.id}`, payload);
+        message.success('Cập nhật dịch vụ thành công');
+      } else {
+        await api.post('/services', payload);
+        message.success('Thêm dịch vụ thành công');
+      }
+      modal.close?.();
+    } catch (e: any) {
+      console.error(e);
+      message.error(e?.response?.data?.message || 'Lỗi khi lưu dịch vụ');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const warrantyOptions = useMemo(
+    () => Array.from({ length: 13 }, (_, i) => ({ value: i, label: i === 0 ? 'Không bảo hành' : `${i} tháng` })),
+    []
+  );
+
+  const formKey = modal.isEdit ? `service-edit-${modal.record?.id ?? 'none'}` : 'service-create';
+
+  return (
+    <Modal
+      title={modal.isEdit ? 'Sửa dịch vụ' : 'Thêm mới dịch vụ'}
+      open={!!modal.isOpen}
+      onCancel={modal.close}
+      footer={null}
+      destroyOnHidden
+    >
+      <Form<FormValues>
+        key={formKey}
+        form={form}
+        layout="horizontal"
+        labelCol={{ span: 6 }}
+        wrapperCol={{ span: 18 }}
+        initialValues={initialValues}
+        onFinish={handleSubmit}
+      >
+        <Form.Item
+          label="Tên dịch vụ"
+          name="service_name"
+          rules={[{ required: true, message: 'Vui lòng nhập tên dịch vụ' }]}
+        >
+          <Input />
+        </Form.Item>
+
+        {/* === Khách hàng (giống MobileModal) === */}
+        <Form.Item
+          label="Tên khách hàng"
+          name="customer_name"
+          rules={[{ required: true, message: 'Vui lòng nhập tên khách hàng' }]}
+          tooltip="Gõ để tìm khách cũ; nếu trùng tên sẽ tự đổ SĐT; nếu không, hãy nhập SĐT mới"
+        >
+          <AutoComplete
+            placeholder="Nhập tên khách hàng"
+            onSearch={handleSearchName}
+            onSelect={handleSelectName}
+            onChange={handleChangeName}
+            onBlur={handleBlurName}
+            options={
+              suggestions.map(s => ({
+                value: s.name,
+                label: s.name,
+                id: s.id,
+                phone: s.phone,
+              })) as any[]
+            }
+            notFoundContent={optionsLoading ? <div style={{ padding: 8 }}><Spin size="small" /></div> : null}
+            optionFilterProp="label"
+          />
+        </Form.Item>
+
+        {/* Ẩn customer_id để submit nếu trùng */}
+        <Form.Item name="customer_id" hidden>
+          <Input />
+        </Form.Item>
+
+        <Form.Item
+          label="Số điện thoại"
+          name="phone_number"
+          rules={
+            isExistingCustomer
+              ? []
+              : [
+                  { required: true, message: 'Nhập số điện thoại' },
+                  { pattern: /^[0-9+\s-]{8,15}$/, message: 'Số điện thoại không hợp lệ' },
+                ]
+          }
+        >
+          <Input
+            placeholder={isExistingCustomer ? 'Tự động theo khách đã có' : 'Nhập số điện thoại mới'}
+            disabled={isExistingCustomer}
+          />
+        </Form.Item>
+        {/* === hết phần KH === */}
+
+        <Form.Item
+          label="Tiền dịch vụ"
+          name="service_price"
+          rules={[{ required: true, message: 'Vui lòng nhập tiền dịch vụ' }]}
+        >
+          <InputNumber
+            min={0}
+            style={{ width: '100%' }}
+            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={parseNumber}
+          />
+        </Form.Item>
+
+        <Form.Item label="Chi phí" name="expense">
+          <InputNumber
+            min={0}
+            style={{ width: '100%' }}
+            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={parseNumber}
+          />
+        </Form.Item>
+
+        <Form.Item label="Nợ lại" name="debt">
+          <InputNumber
+            min={0}
+            style={{ width: '100%' }}
+            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+            parser={parseNumber}
+          />
+        </Form.Item>
+
+        <Form.Item label="Ngày dịch vụ" name="service_date">
+          <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+        </Form.Item>
+
+        <Form.Item
+          label="Bảo hành"
+          name="warranty"
+          rules={[{ required: true, message: 'Vui lòng chọn bảo hành' }]}
+        >
+          <Select options={warrantyOptions} />
+        </Form.Item>
+
+        <Form.Item label="Ghi chú" name="note">
+          <Input.TextArea rows={3} />
+        </Form.Item>
+
+        <Form.Item style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+          <Button type="primary" htmlType="submit" loading={loading}>
+            {modal.isEdit ? 'Lưu thay đổi' : 'Thêm mới'}
+          </Button>
+        </Form.Item>
+      </Form>
+    </Modal>
+  );
+}

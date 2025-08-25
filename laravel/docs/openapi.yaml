@@ -1,0 +1,92 @@
+openapi: 3.0.3
+info:
+  title: Mobile Inventory API
+  version: 1.0.0
+servers:
+  - url: https://your-host/api
+paths:
+  /mobile-in:
+    get:
+      summary: List nhập kho
+      parameters:
+        - in: query
+          name: q
+          schema: { type: string }
+        - in: query
+          name: perPage
+          schema: { type: integer, default: 15 }
+      responses:
+        '200':
+          description: OK
+    post:
+      summary: Tạo máy nhập
+      responses:
+        '201': { description: Created }
+  /mobile-in/{id}:
+    get:
+      summary: Chi tiết nhập kho
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        '200': { description: OK }
+    put:
+      summary: Cập nhật nhập kho
+      responses:
+        '200': { description: OK }
+    delete:
+      summary: Xoá nhập kho
+      responses:
+        '200': { description: OK }
+  /mobile-out:
+    get: { summary: Danh sách bán ra, responses: { '200': { description: OK } } }
+    post: { summary: Tạo bán ra, responses: { '201': { description: Created } } }
+  /mobile-out/{id}:
+    get: { summary: Chi tiết bán ra, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật bán ra, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá bán ra, responses: { '200': { description: OK } } }
+  /suppliers:
+    get: { summary: Danh sách NCC, responses: { '200': { description: OK } } }
+    post: { summary: Tạo NCC, responses: { '201': { description: Created } } }
+  /suppliers/{id}:
+    get: { summary: Chi tiết NCC, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật NCC, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá NCC, responses: { '200': { description: OK } } }
+  /purchase-invoices:
+    get: { summary: Danh sách hoá đơn mua, responses: { '200': { description: OK } } }
+    post: { summary: Tạo hoá đơn mua, responses: { '201': { description: Created } } }
+  /purchase-invoices/{id}:
+    get: { summary: Chi tiết hoá đơn mua, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật hoá đơn mua, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá hoá đơn mua, responses: { '200': { description: OK } } }
+  /colors:
+    get: { summary: Danh sách màu, responses: { '200': { description: OK } } }
+    post: { summary: Tạo màu, responses: { '201': { description: Created } } }
+  /colors/{id}:
+    get: { summary: Chi tiết màu, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật màu, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá màu, responses: { '200': { description: OK } } }
+  /storage:
+    get: { summary: Danh sách storage, responses: { '200': { description: OK } } }
+    post: { summary: Tạo storage, responses: { '201': { description: Created } } }
+  /storage/{id}:
+    get: { summary: Chi tiết storage, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật storage, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá storage, responses: { '200': { description: OK } } }
+  /customers:
+    get: { summary: Danh sách khách hàng, responses: { '200': { description: OK } } }
+    post: { summary: Tạo khách hàng, responses: { '201': { description: Created } } }
+  /customers/{id}:
+    get: { summary: Chi tiết khách hàng, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật khách hàng, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá khách hàng, responses: { '200': { description: OK } } }
+  /services:
+    get: { summary: Danh sách dịch vụ, responses: { '200': { description: OK } } }
+    post: { summary: Tạo dịch vụ, responses: { '201': { description: Created } } }
+  /services/{id}:
+    get: { summary: Chi tiết dịch vụ, responses: { '200': { description: OK } } }
+    patch: { summary: Cập nhật dịch vụ, responses: { '200': { description: OK } } }
+    delete: { summary: Xoá dịch vụ, responses: { '200': { description: OK } } }
+components: {}

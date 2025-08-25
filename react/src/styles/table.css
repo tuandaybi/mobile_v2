@@ -1,0 +1,4 @@
+/* Tạo hiệu ứng hover cho cả hàng */
+.hoverable-row:hover td {
+  background-color: #0f248f1b !important;
+}
