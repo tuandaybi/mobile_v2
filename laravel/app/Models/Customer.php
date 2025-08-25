@@ -13,7 +13,7 @@ class Customer extends Model
 
     protected $table = 'customers';
 
-    protected $fillable = ['store_id','name','phone','social_link','debt','note'];
+    protected $fillable = ['store_id','name','phone','social_link','note'];
 
     protected $casts = ['debt' => 'decimal:2'];
 

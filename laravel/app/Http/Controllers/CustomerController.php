@@ -29,9 +29,6 @@ class CustomerController extends Controller
             });
         }
 
-        // Lọc theo nợ
-        if ($r->filled('debt_min')) $q->where('debt', '>=', (float) $r->input('debt_min'));
-        if ($r->filled('debt_max')) $q->where('debt', '<=', (float) $r->input('debt_max'));
 
         // Lọc theo ngày tạo
         if ($f = $r->input('date_from')) $q->whereDate('created_at', '>=', $f);
@@ -54,7 +51,7 @@ class CustomerController extends Controller
 
             // Chỉ chọn các cột cần thiết cho gợi ý
             $rows = $q->limit($limit)
-                    ->get(['id', 'name', 'phone', 'debt', 'created_at']);
+                    ->get(['id', 'name', 'phone', 'created_at']);
 
             return CustomerResource::collection($rows);
         }

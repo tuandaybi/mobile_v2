@@ -9,6 +9,8 @@ use App\Http\Resources\ServiceResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\Customer;
+use App\Models\Debt;
+use Carbon\Carbon;
 
 
 class ServiceController extends Controller
@@ -44,83 +46,118 @@ class ServiceController extends Controller
         $storeId = $this->resolveStoreId($r);
         $data    = $r->validated();
 
-        // Chuẩn hoá tên dịch vụ
+        // Chuẩn hoá tên dịch vụ: nhận name hoặc service_name
         $data['name'] = $data['name'] ?? ($data['service_name'] ?? null);
         if (empty($data['name'])) {
             return response()->json(['message' => 'Thiếu tên dịch vụ'], 422);
         }
 
-        // === Tạo customer nếu thiếu customer_id ===
+        // === Tạo customer nếu thiếu customer_id (theo đúng pattern MobileOut) ===
         if (empty($data['customer_id'])) {
             $name  = trim($data['customer_name'] ?? '');
             $phone = $data['phone_number'] ?? null;
 
-            if ($name === '')   return response()->json(['message' => 'Thiếu tên khách hàng'], 422);
+            if ($name === '')  return response()->json(['message' => 'Thiếu tên khách hàng'], 422);
             if ($phone === '' || $phone === null) return response()->json(['message' => 'Thiếu số điện thoại'], 422);
 
-            // Lấy tên bảng từ Model để tránh hard-code
-            $customerTable = (new Customer)->getTable(); // => 'customers'
+            $customerTable = (new Customer)->getTable(); // tránh hard-code
 
             $attrs = ['store_id' => (int)$storeId, 'name' => $name];
             if ($phone) {
-                if (Schema::hasColumn($customerTable, 'phone_number')) {
-                    $attrs['phone_number'] = $phone;
-                } elseif (Schema::hasColumn($customerTable, 'phone')) {
+                if (Schema::hasColumn($customerTable, 'phone')) {
                     $attrs['phone'] = $phone;
+                } elseif (Schema::hasColumn($customerTable, 'phone_number')) {
+                    $attrs['phone_number'] = $phone;
                 }
             }
 
             $customer = Customer::where('store_id', $storeId)->where('name', $name)->first();
-
             if (!$customer) {
-                // bỏ qua mass-assignment để chắc set đủ cột
                 $customer = (new Customer())->forceFill($attrs);
                 $customer->save();
-            } else {
-                // nếu có phone mới và cột phone đang trống -> cập nhật nhẹ
+            } elseif ($phone) {
                 $needSave = false;
-                if ($phone) {
-                    if (Schema::hasColumn($customerTable, 'phone_number') && empty($customer->phone_number)) {
-                        $customer->phone_number = $phone; $needSave = true;
-                    } elseif (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone)) {
-                        $customer->phone = $phone; $needSave = true;
-                    }
-                    if ($needSave) $customer->save();
+                if (Schema::hasColumn($customerTable, 'phone_number') && empty($customer->phone_number)) {
+                    $customer->phone_number = $phone; $needSave = true;
+                } elseif (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone)) {
+                    $customer->phone = $phone; $needSave = true;
                 }
+                if ($needSave) $customer->save();
             }
 
             $data['customer_id'] = $customer->id;
         }
 
-        // Dọn field không thuộc bảng services
+        // Bỏ field phụ không thuộc bảng services
         unset($data['customer_name'], $data['phone_number'], $data['service_name']);
 
-        // Bổ sung store_id & user_id cho services
+        // Chuẩn hoá số
+        foreach (['service_price', 'expense', 'warranty', 'debt'] as $numField) {
+            if (array_key_exists($numField, $data) && $data[$numField] !== null) {
+                $data[$numField] = (float)str_replace(',', '', (string)$data[$numField]);
+            }
+        }
+
+        // Không cho client set store_id
+        unset($data['store_id']);
+
+        // Gán store_id & user_id
         $data['store_id'] = $storeId;
         $data['user_id']  = $data['user_id'] ?? $userId;
 
-        // Transaction: tạo service + cộng dồn nợ vào customers.debt
-        $service = DB::transaction(function () use ($data, $storeId) {
-            // 1) Tạo dịch vụ
-            $svc = Service::create($data);
+        // ====== Transaction: tạo service + tạo Debt nếu có nợ (KHÔNG cộng dồn customers.debt) ======
+        [$service, $createdDebt] = DB::transaction(function () use ($data) {
 
-            // 2) Cộng dồn nợ cho khách (nếu có)
-            $debtToAdd = (float)($data['debt'] ?? 0);
+            // 1) Tạo service
+            $service = Service::create($data);
+
+            // 2) Nếu có nợ => tạo bản ghi Debt (không đụng customers.debt)
+            $createdDebt = null;
+            $debtToAdd   = (float)($data['debt'] ?? 0);
             if ($debtToAdd > 0 && !empty($data['customer_id'])) {
-                Customer::where('id', $data['customer_id'])
-                    ->where('store_id', $storeId)
-                    ->lockForUpdate()
-                    ->first()
-                    ?->increment('debt', $debtToAdd);
+                $serviceDate = !empty($data['service_date'])
+                    ? Carbon::parse($data['service_date'])->toDateString()
+                    : now()->toDateString();
+
+                $dueDate = !empty($data['due_date'])
+                    ? Carbon::parse($data['due_date'])->toDateString()
+                    : null;
+
+                $createdDebt = Debt::create([
+                    'mobileout_id'        => null,
+                    'service_id'          => $service->id,
+                    'customer_id'         => $data['customer_id'],
+                    'debt'                => $debtToAdd,
+                    'paid_amount'         => 0,
+                    'last_payment_amount' => null,
+                    'last_payment_at'     => null,
+                    'status'              => 'pending',
+                    'date'                => $serviceDate,
+                    'due_date'            => $dueDate,
+                    'note'                => 'Nợ phát sinh từ dịch vụ #'.$service->id,
+                ]);
             }
 
-            return $svc;
+            return [$service, $createdDebt];
         });
 
-        // Trả resource (tuỳ cột phone hay phone_number của bạn)
+        // Trả resource + info về debt vừa tạo (nếu có)
         return (new ServiceResource(
             $service->load(['user:id,name', 'customer:id,name'])
-        ))->response()->setStatusCode(201);
+        ))
+        ->additional([
+            'debt' => $createdDebt ? [
+                'id'                  => $createdDebt->id,
+                'debt'                => (float)$createdDebt->debt,
+                'status'              => $createdDebt->status,
+                'remaining'           => (float)$createdDebt->remaining, // accessor nếu có
+                'last_payment_amount' => $createdDebt->last_payment_amount ? (float)$createdDebt->last_payment_amount : null,
+                'last_payment_at'     => optional($createdDebt->last_payment_at)->toIso8601String(),
+            ] : null,
+            'message' => 'Tạo dịch vụ thành công'.($createdDebt ? ' (đã tạo công nợ)' : ''),
+        ])
+        ->response()
+        ->setStatusCode(201);
     }
 
     public function show(Request $r, $id)
@@ -134,50 +171,58 @@ class ServiceController extends Controller
     {
         $storeId = $this->resolveStoreId($r);
 
+        // Tìm service đúng cửa hàng
         $svc = Service::where('store_id', $storeId)->findOrFail($id);
 
-        // Lấy dữ liệu hợp lệ từ Request
         $data = $r->validated();
 
-        // ❌ Không cho cập nhật debt khi edit
-        unset($data['debt']);
+        // Không cho client sửa các field sau ở màn edit
+        unset($data['debt'], $data['store_id']);
 
-        // ❌ Không cho cập nhật store_id từ client
-        unset($data['store_id']);
-
-        // Chuẩn hoá số
+        // Chuẩn hoá số: tuỳ DB của bạn là int/decimal mà cast cho hợp
         foreach (['service_price', 'expense', 'warranty'] as $numField) {
-            if (array_key_exists($numField, $data) && $data[$numField] !== null) {
-                $data[$numField] = (int) $data[$numField];
+            if (array_key_exists($numField, $data) && $data[$numField] !== null && $data[$numField] !== '') {
+                // giá & expense có thể là decimal, đổi sang số sạch (loại dấu phẩy/thousand)
+                $clean = preg_replace('/[^\d.-]/', '', (string)$data[$numField]);
+                // warranty thường là ngày (int)
+                $data[$numField] = $numField === 'warranty'
+                    ? (int) $clean
+                    : (float) $clean;
             }
         }
 
-        // Chuẩn hoá ngày service_date -> YYYY-MM-DD (chịu nhiều định dạng)
-        if (!empty($data['service_date'])) {
+        // Chuẩn hoá ngày
+        if (array_key_exists('service_date', $data) && $data['service_date']) {
             try {
-                // Carbon::parse chấp nhiều format/ISO; nếu muốn strict hơn thì tự parse format cụ thể
                 $data['service_date'] = Carbon::parse($data['service_date'])->toDateString();
             } catch (\Throwable $e) {
-                // nếu parse fail, có thể giữ nguyên hoặc fallback về hôm nay
-                $data['service_date'] = Carbon::now()->toDateString();
+                return response()->json(['message' => 'Ngày dịch vụ không hợp lệ'], 422);
             }
         }
 
-        // Xử lý khách hàng (nếu client gửi customer_id thì ưu tiên; nếu gửi name/phone thì find-or-create)
         DB::transaction(function () use ($r, $storeId, $svc, &$data) {
-            $customerId = $data['customer_id'] ?? null;
+            // 1) Nếu client gửi customer_id → validate thuộc đúng store
+            if (array_key_exists('customer_id', $data) && $data['customer_id']) {
+                $ok = Customer::where('store_id', $storeId)
+                    ->where('id', (int)$data['customer_id'])
+                    ->exists();
 
-            // Nếu chưa có customer_id, thử lấy từ name/phone
-            if (!$customerId) {
+                if (!$ok) {
+                    abort(response()->json(['message' => 'Khách hàng không thuộc cửa hàng này'], 422));
+                }
+            } else {
+                // 2) Không có customer_id → thử tìm/tao theo name/phone
                 $name  = trim((string) $r->input('customer_name', ''));
                 $phone = trim((string) $r->input('phone_number', ''));
 
                 if ($name !== '' || $phone !== '') {
-                    // tìm theo phone trước (độc nhất hơn), rơi về name nếu cần
-                    $customer = Customer::where('store_id', $storeId)
-                        ->when($phone !== '', fn($q) => $q->where('phone', $phone))
-                        ->when($phone === '' && $name !== '', fn($q) => $q->where('name', $name))
-                        ->first();
+                    $query = Customer::where('store_id', $storeId);
+                    if ($phone !== '') {
+                        $query->where('phone', $phone);
+                    } elseif ($name !== '') {
+                        $query->where('name', $name);
+                    }
+                    $customer = $query->first();
 
                     if (!$customer) {
                         $customer = Customer::create([
@@ -191,21 +236,21 @@ class ServiceController extends Controller
                 }
             }
 
-            // Không lưu các trường chỉ dùng để nhập liệu
+            // 3) Dữ liệu chỉ phục vụ nhập liệu → không lưu
             unset($data['customer_name'], $data['phone_number']);
 
-            // (tuỳ chọn) cập nhật user thực hiện sửa
+            // (tuỳ) lưu user thực hiện sửa
             if ($r->user()) {
                 $data['user_id'] = $r->user()->id;
             }
 
+            // 4) Cập nhật
             $svc->update($data);
         });
 
-        // Đổi 'customers' -> 'customer' nếu quan hệ của bạn đặt tên số ít (khuyên dùng)
         return new ServiceResource(
             $svc->fresh()->load([
-                'customer:id,name,phone', // hoặc 'customers:id,name,phone' nếu bạn đang đặt lạ
+                'customer:id,name,phone',
                 'user:id,name',
             ])
         );

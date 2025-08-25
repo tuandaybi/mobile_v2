@@ -14,7 +14,6 @@ class CustomerResource extends JsonResource
             'name'=>$this->name,
             'phone'=>$this->phone,
             'social_link'=>$this->social_link,
-            'debt'=>$this->debt,
             'note'=>$this->note,
             'created_at'=>optional($this->created_at)->toISOString(),
         ];

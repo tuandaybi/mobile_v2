@@ -209,12 +209,12 @@ export default function ServiceModal() {
         delete payload.debt; 
         await api.put(`/services/${modal.record.id}`, payload);
         message.success('Cập nhật dịch vụ thành công');
-        bumpServicesVersion();
-        modal.close?.();
       } else {
         await api.post('/services', payload);
         message.success('Thêm dịch vụ thành công');
       } 
+      bumpServicesVersion();
+      modal.close?.();
     } catch (e: any) {
       console.error(e);
       message.error(e?.response?.data?.message || 'Lỗi khi lưu dịch vụ');

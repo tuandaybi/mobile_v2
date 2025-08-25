@@ -15,7 +15,6 @@ class CustomerUpdateRequest extends FormRequest
             'phone'       => ['sometimes','nullable','string','max:20',
                 Rule::unique('customer','phone')->ignore($id)->where(fn($q)=>$q->where('store_id',$storeId))],
             'social_link' => ['sometimes','nullable','string','max:255'],
-            'debt'        => ['sometimes','nullable','numeric','min:0'],
             'note'        => ['sometimes','nullable','string'],
         ];
     }
