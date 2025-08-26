@@ -5,7 +5,7 @@ use App\Http\Controllers\{
     SupplierController, PurchaseInvoiceController,
     ColorController, DeviceStorageController, 
     CustomerController, ServiceController, AuthController,
-    DeviceController, UserController
+    DeviceController, UserController, DebtController
 };
 
 Route::post('/login', [AuthController::class, 'login']);
@@ -41,6 +41,12 @@ Route::middleware('auth:sanctum')->group(function () {
 
     //Services
     Route::apiResource('services', ServiceController::class);
+
+    //Debt
+    Route::get('/debts/summary', [DebtController::class, 'summary']);
+    Route::get('/debts/customer/{customer}', [DebtController::class, 'openDebtsByCustomer']);
+    Route::post('/debts/{debt}/pay', [DebtController::class, 'payOne']);
+    Route::post('/debts/settle-customer/{customer}', [DebtController::class, 'settleCustomer']);
 
 });
 Route::middleware(['auth:sanctum'])

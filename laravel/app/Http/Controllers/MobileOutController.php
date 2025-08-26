@@ -153,8 +153,88 @@ class MobileOutController extends Controller
 
     public function show($id)
     {
-        $sale = MobileOut::with(['mobileIn.device','mobileIn.color','mobileIn.storage','user','customer'])->findOrFail($id);
-        return new MobileOutResource($sale);
+        // 1) Lấy đơn + quan hệ cần thiết để hiển thị
+        $sale = MobileOut::with([
+            'mobileIn.device',
+            'mobileIn.color',
+            'mobileIn.storage',
+            'customer',
+            'user',
+        ])->findOrFail($id);
+
+        // 2) Giá bán/tổng tiền NẰM Ở MOBILE_OUT
+        // Ưu tiên cột 'price', sau đó là các cột tổng phổ biến khác nếu schema khác tên
+        $salePrice = (int) (
+            $sale->export_price
+            ?? $sale->total
+            ?? $sale->amount
+            ?? $sale->subtotal
+            ?? 0
+        );
+
+        // 3) Đã trả: lấy từ hệ công nợ (debts -> debt_payments) nếu có liên kết
+        $paidFromDebts = 0;
+        if (Schema::hasTable('debts') && Schema::hasTable('debt_payments')) {
+            // tự dò cột liên kết đơn bán: mobile_out_id > sale_id (tuỳ DB thật)
+            $refCol = null;
+            if (Schema::hasColumn('debts', 'mobile_out_id')) {
+                $refCol = 'mobile_out_id';
+            } elseif (Schema::hasColumn('debts', 'sale_id')) {
+                $refCol = 'sale_id';
+            }
+
+            if ($refCol) {
+                $paidFromDebts = (int) DB::table('debts as d')
+                    ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+                    ->where("d.$refCol", $sale->id)
+                    ->selectRaw('COALESCE(SUM(p.amount),0) as paid')
+                    ->value('paid');
+            }
+        }
+
+        // fallback nếu chưa dùng hệ công nợ
+        $paid = $paidFromDebts > 0
+            ? $paidFromDebts
+            : (int) ($sale->paid ?? $sale->payment_total ?? 0);
+
+        $debt = max(0, $salePrice - $paid);
+
+        // 4) Items: hiển thị thông tin máy từ mobileIn, NHƯNG price lấy từ MOBILE_OUT
+        $items = [];
+        if ($sale->mobileIn) {
+            $mi = $sale->mobileIn; // belongsTo một máy
+            $items[] = [
+                'imei'        => $mi->imei ?? $mi->mb_imei ?? '',
+                'device_name' => optional($mi->device)->name ?? ($mi->device_name ?? ''),
+                'color'       => optional($mi->color)->vi_name
+                                ?? ($mi->color->name ?? $mi->color ?? ''),
+                'storage'     => optional($mi->storage)->size_gb
+                                    ? (optional($mi->storage)->size_gb . ' GB')
+                                    : ($mi->storage->name ?? $mi->storage ?? ''),
+                // GIÁ lấy từ đơn bán (mobile_out), không lấy từ mobile_in
+                'price'       => $salePrice,
+            ];
+        }
+        // Nếu sau này có hasMany items, bạn map từng item và chia giá theo logic của bạn.
+
+        // 5) Thêm thông tin chung
+        $code         = $sale->code ?? $sale->order_code ?? ('MO-' . $sale->id);
+        $date         = $sale->sale_date ?? $sale->created_at;
+        $customerName = optional($sale->customer)->name ?? $sale->customer_name ?? null;
+
+        // 6) Trả về đúng format mà FE (normalizeMobileOut) đang đọc
+        return response()->json([
+            'id'            => (int) $sale->id,
+            'code'          => $code,
+            'customer_name' => $customerName,
+            'items'         => $items,           // mỗi item.price = giá của mobile_out
+            'subtotal'      => $salePrice,       // FE sẽ đọc subtotal/total/amount — ở đây trả về subtotal
+            'paid'          => $paid,
+            'debt'          => $debt,
+            'date'          => $date,
+            'note'          => $sale->note ?? null,
+            'user_name'     => optional($sale->user)->name ?? null,
+        ]);
     }
 
     public function update(MobileOutUpdateRequest $r, $id)

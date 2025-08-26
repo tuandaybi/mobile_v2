@@ -21,7 +21,7 @@ class Service extends Model
         'expense' => 'decimal:2',
     ];
 
-    public function store():    BelongsTo { return $this->belongsTo(Store::class); }
-    public function customer(): BelongsTo { return $this->belongsTo(Customer::class); }
-    public function user():     BelongsTo { return $this->belongsTo(User::class); }
+    public function store():    BelongsTo { return $this->belongsTo(Store::class, 'store_id'); }
+    public function customer(): BelongsTo { return $this->belongsTo(Customer::class, 'customer_id'); }
+    public function user():     BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
 }

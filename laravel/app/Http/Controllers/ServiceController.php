@@ -160,11 +160,23 @@ class ServiceController extends Controller
         ->setStatusCode(201);
     }
 
-    public function show(Request $r, $id)
+    public function show($id)
     {
-        $storeId = $this->resolveStoreId($r);
-        $svc = Service::with(['customers:id,name,phone','user:id,name'])->where('store_id',$storeId)->findOrFail($id);
-        return new ServiceResource($svc);
+        $s = Service::with('customer')->findOrFail($id);
+
+        // tuỳ schema thực tế, map về payload FE đang đọc
+        return response()->json([
+            'id'            => $s->id,
+            'service_name'  => $s->service_name ?? $s->name,
+            'customer_name' => optional($s->customer)->name,
+            'service_date'  => $s->service_date ?? $s->created_at,
+            'service_price' => (int) ($s->service_price ?? $s->price ?? $s->amount),
+            'expense'       => (int) ($s->expense ?? 0),
+            'paid'          => (int) ($s->paid ?? $s->payment_total ?? 0),
+            'debt'          => max(0, (int) ($s->service_price ?? $s->price ?? $s->amount) - (int) ($s->paid ?? 0)),
+            'warranty'      => (int) ($s->warranty ?? 0),
+            'note'          => $s->note,
+        ]);
     }
 
     public function update(ServiceUpdateRequest $r, $id)

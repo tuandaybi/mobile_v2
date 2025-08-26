@@ -7,8 +7,7 @@ import { useModalStore } from "../store/modalStore";
 import PageTable from "@/components/shared/PageTable";
 import api from "@/../axiosConfig";
 
-const fVND = (n: number) =>
-  new Intl.NumberFormat("vi-VN", { maximumFractionDigits: 0 }).format(n);
+const fVND = (n: number) => `${Number(n || 0).toLocaleString()} đ`;
 
 const matchKw = (row: any, kw: string) => {
   const hay = [
