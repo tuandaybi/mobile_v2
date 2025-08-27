@@ -378,6 +378,7 @@ const DebtsPage: React.FC = () => {
               onChange={(v) =>
                 useModalStore.getState().debtPay.setFields({ amount: Number(v) || 0 })
               }
+              formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
               value={debtPay.amount ?? undefined}
             />
           </Form.Item>

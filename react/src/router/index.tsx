@@ -17,6 +17,7 @@ const ReportQuantityPage = lazy(() => import('@/pages/ReportQuantityPage'));
 
 // Admin pages
 const AdminUsers = lazy(() => import('@/pages/admin/users'));
+const AdminCustomers = lazy(() => import('@/pages/admin/customers'));
 const AdminDevices = lazy(() => import('@/pages/admin/devices'));
 const AdminColors = lazy(() => import('@/pages/admin/colors'));
 const AdminStores = lazy(() => import('@/pages/admin/stores'));
@@ -40,6 +41,7 @@ const Router: React.FC = () => {
           <Route path="/report-profit" element={<ProtectedRoute><ReportProfitPage /></ProtectedRoute>} />
           <Route path="/report-quantity" element={<ProtectedRoute><ReportQuantityPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
+          <Route path="/admin/customers" element={<ProtectedRoute><AdminCustomers /></ProtectedRoute>} />
           <Route path="/admin/stores" element={<ProtectedRoute><AdminStores /></ProtectedRoute>} />
           <Route path="/admin/devices" element={<ProtectedRoute><AdminDevices /></ProtectedRoute>} />
           <Route path="/admin/colors" element={<ProtectedRoute><AdminColors /></ProtectedRoute>} />

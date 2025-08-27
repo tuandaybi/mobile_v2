@@ -179,27 +179,21 @@ class ServiceController extends Controller
         ]);
     }
 
+    
     public function update(ServiceUpdateRequest $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
 
-        // Tìm service đúng cửa hàng
+        // Service thuộc đúng store
         $svc = Service::where('store_id', $storeId)->findOrFail($id);
 
         $data = $r->validated();
 
-        // Không cho client sửa các field sau ở màn edit
-        unset($data['debt'], $data['store_id']);
-
-        // Chuẩn hoá số: tuỳ DB của bạn là int/decimal mà cast cho hợp
+        // Chuẩn hoá số
         foreach (['service_price', 'expense', 'warranty'] as $numField) {
             if (array_key_exists($numField, $data) && $data[$numField] !== null && $data[$numField] !== '') {
-                // giá & expense có thể là decimal, đổi sang số sạch (loại dấu phẩy/thousand)
                 $clean = preg_replace('/[^\d.-]/', '', (string)$data[$numField]);
-                // warranty thường là ngày (int)
-                $data[$numField] = $numField === 'warranty'
-                    ? (int) $clean
-                    : (float) $clean;
+                $data[$numField] = $numField === 'warranty' ? (int)$clean : (float)$clean;
             }
         }
 
@@ -212,58 +206,108 @@ class ServiceController extends Controller
             }
         }
 
-        DB::transaction(function () use ($r, $storeId, $svc, &$data) {
-            // 1) Nếu client gửi customer_id → validate thuộc đúng store
-            if (array_key_exists('customer_id', $data) && $data['customer_id']) {
-                $ok = Customer::where('store_id', $storeId)
-                    ->where('id', (int)$data['customer_id'])
-                    ->exists();
+        // Chuẩn hoá debt (nếu có)
+        $incomingDebt = null;
+        if ($r->has('debt')) {
+            $val = trim((string)$r->input('debt', ''));
+            $incomingDebt = $val === '' ? 0.0 : (float)preg_replace('/[^\d.-]/', '', $val);
+            if ($incomingDebt < 0) $incomingDebt = 0.0;
+        }
 
-                if (!$ok) {
+        DB::transaction(function () use ($r, $storeId, $svc, &$data, $incomingDebt) {
+            // ===== CUSTOMER =====
+
+            if ($r->filled('customer_id')) {
+                // Có customer_id -> cho phép cập nhật name/phone của chính khách đó
+                $customer = Customer::where('store_id', $storeId)
+                    ->where('id', (int)$r->input('customer_id'))
+                    ->first();
+
+                if (!$customer) {
                     abort(response()->json(['message' => 'Khách hàng không thuộc cửa hàng này'], 422));
                 }
+
+                // Cập nhật nếu có thay đổi
+                $name  = trim((string)$r->input('customer_name', ''));
+                $phone = trim((string)$r->input('phone_number', ''));
+                $patch = [];
+                if ($name !== '' && $name !== $customer->name) $patch['name'] = $name;
+                if ($phone !== '' && $phone !== (string)$customer->phone) $patch['phone'] = $phone;
+                if ($patch) $customer->update($patch);
+
+                $data['customer_id'] = $customer->id;
             } else {
-                // 2) Không có customer_id → thử tìm/tao theo name/phone
-                $name  = trim((string) $r->input('customer_name', ''));
-                $phone = trim((string) $r->input('phone_number', ''));
+                // KHÔNG có customer_id:
+                // - Nếu có phone -> tìm đúng phone trong store. Nếu thấy: dùng lại (KHÔNG cập nhật). Không thấy: tạo mới.
+                // - Nếu không có phone -> luôn tạo mới (không ghép theo name để tránh ghi đè).
+                $name  = trim((string)$r->input('customer_name', ''));
+                $phone = trim((string)$r->input('phone_number', ''));
 
-                if ($name !== '' || $phone !== '') {
-                    $query = Customer::where('store_id', $storeId);
-                    if ($phone !== '') {
-                        $query->where('phone', $phone);
-                    } elseif ($name !== '') {
-                        $query->where('name', $name);
-                    }
-                    $customer = $query->first();
+                if ($phone !== '') {
+                    $customer = Customer::where('store_id', $storeId)
+                        ->where('phone', $phone) // chỉ match CHÍNH XÁC phone
+                        ->first();
 
-                    if (!$customer) {
+                    if ($customer) {
+                        if ($name !== '' && $name !== $customer->name) {
+                            $customer->update(['name' => $name]);
+                        }
+                        $data['customer_id'] = $customer->id;
+                    } else {
+                        // Không tìm thấy theo phone -> TẠO MỚI
                         $customer = Customer::create([
                             'store_id' => $storeId,
                             'name'     => $name !== '' ? $name : 'Khách lẻ',
-                            'phone'    => $phone !== '' ? $phone : null,
+                            'phone'    => $phone,
                         ]);
+                        $data['customer_id'] = $customer->id;
                     }
-
-                    $data['customer_id'] = $customer->id;
+                } else {
+                    return response()->json(['message' => 'Chưa nhập sđt khách hàng'], 422);
                 }
             }
 
-            // 3) Dữ liệu chỉ phục vụ nhập liệu → không lưu
-            unset($data['customer_name'], $data['phone_number']);
+            // Ghi user sửa
+            if ($r->user()) $data['user_id'] = $r->user()->id;
 
-            // (tuỳ) lưu user thực hiện sửa
-            if ($r->user()) {
-                $data['user_id'] = $r->user()->id;
-            }
+            // Không cho sửa store_id
+            unset($data['store_id']);
 
-            // 4) Cập nhật
+            // ===== UPDATE SERVICE =====
             $svc->update($data);
+
+            // ===== DEBT (chỉ bảng debts) =====
+            if ($incomingDebt !== null) {
+                $customerId = $data['customer_id'] ?? $svc->customer_id;
+
+                if ($incomingDebt > 0) {
+                    // Chuẩn hoá ngày nợ
+                    $debtDate = $r->filled('debt_date')
+                        ? Carbon::parse($r->input('debt_date'))->toDateString()
+                        : now(); // đổi ->toDateString() nếu cột 'date' là DATE
+                    // upsert theo service_id
+                    $existing = Debt::where('service_id', $svc->id)->first();
+                    $payload = [
+                        'customer_id' => $customerId,
+                        'service_id'  => $svc->id,
+                        'debt'      => $incomingDebt,
+                        'date'      => $debtDate,
+                        'note'        => $r->input('debt_note') ?: ('Nợ phát sinh từ dịch vụ #' . $svc->id),
+                    ];
+
+                    Debt::create($payload);
+                } else {
+                    // debt = 0 hoặc rỗng -> xoá nợ của service này (nếu có)
+                    Debt::where('service_id', $svc->id)->delete();
+                }
+            }
         });
 
         return new ServiceResource(
             $svc->fresh()->load([
                 'customer:id,name,phone',
                 'user:id,name',
+                // 'debt' // nếu có quan hệ hasOne trên Service
             ])
         );
     }

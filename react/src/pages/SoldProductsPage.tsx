@@ -1,166 +1,187 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import MainLayout from "../components/layout/MainLayout";
-import {
-  Row,
-  Col,
-  Button,
-  Space,
-  message,
-} from "antd";
+import { Row, Col, Button, Space, message, Modal } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
-import { useModalStore } from '../store/modalStore';
 import PageTable from "@/components/shared/PageTable";
+import api from "../../axiosConfig";
+import { useModalStore } from "../store/modalStore";
 
-type SoldMobile = {
+type SoldRow = {
   id: number;
-  productName: string;   // Tên sản phẩm
-  importDate: string;    // Ngày nhập
-  importPrice: number;   // Giá nhập
-  sellPrice: number;     // Giá bán
-  sellDate: string;      // Ngày bán
-  buyer: string;         // Người mua
-  phone: string;         // SĐT
-  cost: number;          // Chi phí
-  debt: number;          // Công nợ
-  sellNote: string;      // Ghi chú bán
+  device_name: string;     // iPhone 16 Plus
+  country_code?: string;   // VN/A, LL/A...
+  storage_gb?: number;     // 128
+  color_name?: string;     // White
+  customer_name?: string;
+  customer_phone?: string;
+  sale_date?: string;      // ISO (có thể có microseconds)
+  price: number;
+  note?: string;
+  warranty?: number;
+
+  // nếu bạn muốn mở modal sửa bán:
+  raw?: any;               // giữ nguyên để truyền vào sellMobile.open(true, raw)
 };
 
-const mockSoldMobiles: SoldMobile[] = Array.from({ length: 100 }, (_, i) => {
-  return {
-    id: i + 1,
-    productName: `iPhone ${Math.floor(Math.random() * 5) + 12} Pro Max`,
-    importDate: new Date(2025, Math.floor(Math.random() * 8), Math.floor(Math.random() * 28) + 1)
-      .toISOString()
-      .split("T")[0],
-    importPrice: (Math.floor(Math.random() * 20) + 10) * 1000000,
-    sellPrice: (Math.floor(Math.random() * 20) + 15) * 1000000,
-    sellDate: new Date(2025, Math.floor(Math.random() * 8), Math.floor(Math.random() * 28) + 1)
-      .toISOString()
-      .split("T")[0],
-    buyer: ["Tú Bình", "C Hương", "Anh Tuấn", "Minh Quân"][Math.floor(Math.random() * 4)],
-    phone: "09" + Math.floor(10000000 + Math.random() * 90000000),
-    cost: Math.floor(Math.random() * 2000000),
-    debt: Math.random() > 0.7 ? (Math.floor(Math.random() * 10) + 1) * 500000 : 0,
-    sellNote: Math.random() > 0.5 ? "Khách hài lòng" : "",
-  };
-});
+const fmtDate = (v: unknown) => {
+  if (v == null) return '—';
+
+  // dayjs instance
+  // @ts-ignore
+  if (dayjs.isDayjs?.(v)) return (v as dayjs.Dayjs).format('DD/MM/YYYY');
+
+  // string (có thể có microseconds ".000000Z")
+  if (typeof v === 'string') {
+    const normalized = v.includes('.') ? v.replace(/\.\d+Z$/, 'Z') : v;
+    const m = dayjs(normalized);
+    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+  }
+
+  // Date object
+  if (v instanceof Date) {
+    const m = dayjs(v);
+    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+  }
+
+  // timestamp number (ms)
+  if (typeof v === 'number') {
+    const m = dayjs(new Date(v));
+    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+  }
+
+  // fallback: thử parse “cưỡng bức”
+  const m = dayjs((v as any)?.toString?.() ?? v as any);
+  return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+};
+
+const currency = (v: any) => {
+  const n = Number(v ?? 0);
+  return `${n.toLocaleString()} đ`;
+};
+
+const buildProduct = (r: SoldRow) => {
+  const parts = [
+    r.device_name,
+    r.country_code ? `${r.country_code}` : undefined,
+    r.storage_gb ? `${r.storage_gb}GB` : undefined,
+    r.color_name ? `(${r.color_name})` : undefined,
+  ].filter(Boolean);
+  // iPhone 16 Plus - VN/A - 128GB - (White)
+  return parts.join(" - ");
+};
 
 const SoldMobilesPage: React.FC = () => {
-  const [searchText, setSearchText] = useState("");
-  const { mobile, sellMobile } = useModalStore();
-  const [data, setData] = useState(mockSoldMobiles);
+  const { sellMobile } = useModalStore();
+  const [rows, setRows] = useState<SoldRow[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  const handleSearch = (value: string) => {
-    setSearchText(value);
-    const filtered = mockSoldMobiles.filter((item) =>
-      Object.values(item).some((val) =>
-        String(val).toLowerCase().includes(value.toLowerCase())
-      )
-    );
-    setData(filtered);
-  };
-
-  const handleActionClick = (action: string, record: SoldMobile) => {
-    if (action === "editImport") {
-      mobile.open(true)
-    } else if (action === "editSell") {
-      sellMobile.open(true)
-    } else if (action === "refund") {
-      message.info(`Trả lại sản phẩm ${record.productName}`);
+  const fetchList = async (q?: string) => {
+    try {
+      setLoading(true);
+      const res = await api.get("/mobile-out", { params: { q, limit: 50 } });
+      // Chuẩn hoá dữ liệu từ BE
+      const list: any[] = Array.isArray(res.data?.data) ? res.data.data
+                        : Array.isArray(res.data) ? res.data
+                        : [];
+      const mapped: SoldRow[] = list.map((x: any) => ({
+        id: Number(x.id),
+        device_name: x.device_name ?? x.mobile_in?.device?.name ?? "",
+        country_code: x.country_code ?? x.mobile_in?.country_code ?? x.device?.country_code,
+        storage_gb: Number(x.storage_gb ?? x.mobile_in?.storage?.size_gb ?? x.storage_gb),
+        color_name: x.color_name ?? x.mobile_in?.color?.vi_name ?? x.color_name,
+        customer_name: x.customer_name ?? x.customer?.name,
+        customer_phone: x.customer_phone ?? x.customer?.phone,
+        sale_date: x.sale_date ?? x.date ?? x.created_at,
+        price: Number(x.price ?? x.total ?? x.amount ?? 0),
+        note: x.note ?? "",
+        warranty: x.warranty ?? 0,
+        raw: {
+          ...x,
+          mobile_out_id: Number(x.id),
+          mobile_in_id: Number(x.mobile_in_id ?? x.mobile_in?.id ?? 0),
+        },
+      }));
+      setRows(mapped);
+    } catch (e: any) {
+      console.error(e);
+      message.error(e?.response?.data?.message ?? "Lỗi tải danh sách máy đã bán");
+    } finally {
+      setLoading(false);
     }
   };
 
-  const columns: ColumnsType<SoldMobile> = [
-    { title: "Tên sản phẩm", dataIndex: "productName", key: "productName" },
-    {
-      title: "Ngày nhập",
-      dataIndex: "importDate",
-      key: "importDate",
-      render: (date) => dayjs(date).format("DD/MM/YYYY"),
-    },
-    {
-      title: "Giá nhập",
-      dataIndex: "importPrice",
-      key: "importPrice",
-      render: (price) => `${price.toLocaleString()} đ`,
-    },
-    {
-      title: "Giá bán",
-      dataIndex: "sellPrice",
-      key: "sellPrice",
-      render: (price) => `${price.toLocaleString()} đ`,
-    },
-    {
-      title: "Ngày bán",
-      dataIndex: "sellDate",
-      key: "sellDate",
-      render: (date) => dayjs(date).format("DD/MM/YYYY"),
-    },
-    { title: "Người mua", dataIndex: "buyer", key: "buyer" },
-    { title: "SĐT", dataIndex: "phone", key: "phone" },
-    {
-      title: "Chi phí",
-      dataIndex: "cost",
-      key: "cost",
-      render: (cost) => `${cost.toLocaleString()} đ`,
-    },
-    {
-      title: "Công nợ",
-      dataIndex: "debt",
-      key: "debt",
-      render: (debt) => (
-        <span style={{ color: debt > 0 ? "red" : "green" }}>
-          {debt.toLocaleString()} đ
-        </span>
-      ),
-    },
-    { title: "Ghi chú bán", dataIndex: "sellNote", key: "sellNote" },
+  useEffect(() => {
+    fetchList();
+  }, []);
+
+  const handleSearch = (value: string) => {
+    fetchList(value);
+  };
+
+  const handleEdit = (record: SoldRow) => {
+    // mở modal "sửa bán" của bạn (đã có trong modalStore)
+    const payload = {
+    ...(record.raw ?? {}),
+    mobile_out_id: record.raw?.mobile_out_id ?? record.id,
+    mobile_in_id: record.raw?.mobile_in_id ?? 0,
+  };
+    sellMobile.open(true, payload);
+  };
+
+  const handleDelete = async (record: SoldRow) => {
+    Modal.confirm({
+      title: `Xóa đơn bán #${record.id}?`,
+      content: "Thao tác sẽ xóa bản ghi nợ liên quan và hoàn trạng thái máy về chưa bán.",
+      okText: "Xóa",
+      okButtonProps: { danger: true },
+      cancelText: "Hủy",
+      onOk: async () => {
+        try {
+          await api.delete(`/mobile-out/${record.id}`);
+          message.success("Đã xóa đơn bán & công nợ liên quan");
+          await fetchList();
+        } catch (e: any) {
+          console.error(e);
+          message.error(e?.response?.data?.message ?? "Xóa thất bại");
+        }
+      },
+    });
+  };
+
+  const columns: ColumnsType<SoldRow> = useMemo(() => [
+    { title: "Tên SP", dataIndex: "device_name", key: "device_name", render: (_, r) => buildProduct(r) },
+    { title: "Tên Khách Hàng", dataIndex: "customer_name", key: "customer_name" },
+    { title: "SĐT Khách hàng", dataIndex: "customer_phone", key: "customer_phone" },
+    { title: "Ngày Bán", dataIndex: "sale_date", key: "sale_date", render: (d) => fmtDate(d) },
+    { title: "Bảo hành", dataIndex: "warranty", key: "warranty", render: (d) => fmtDate(d) },
+    { title: "Giá Bán", dataIndex: "price", key: "price", render: (p) => currency(p) },
+    { title: "Ghi chú", dataIndex: "note", key: "note" },
     {
       title: "Chức năng",
       key: "action",
       render: (_, record) => (
         <Space.Compact>
-          <Button
-            type="default"
-            size="small"
-            onClick={() => handleActionClick("editImport", record)}
-          >
-            Sửa mua
-          </Button>
-          <Button
-            type="primary"
-            size="small"
-            onClick={() => handleActionClick("editSell", record)}
-          >
-            Sửa bán
-          </Button>
-          <Button
-           type="primary"
-            danger
-            size="small"
-            onClick={() => handleActionClick("refund", record)}
-          >
-            Trả lại
-          </Button>
+          <Button size="small" onClick={() => handleEdit(record)}>Sửa</Button>
+          <Button danger size="small" onClick={() => handleDelete(record)}>Xóa</Button>
         </Space.Compact>
       ),
     },
-  ];
+  ], []);
 
   return (
     <MainLayout>
       <Row gutter={16}>
         <Col span={24}>
-          <PageTable<SoldMobile>
+          <PageTable<SoldRow>
             title="📦 Danh sách máy đã bán"
-            data={data}
+            data={rows}
+            loading={loading}
             columns={columns}
             pageSize={14}
             rowKey="id"
-            onSearch={handleSearch}      // bỏ prop này nếu không cần search
+            onSearch={handleSearch}
             scrollX="max-content"
-            //extra={<Button type="primary" icon={<PlusOutlined />}>Thêm</Button>}
           />
         </Col>
       </Row>

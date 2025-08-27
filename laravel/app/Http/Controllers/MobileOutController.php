@@ -18,31 +18,48 @@ class MobileOutController extends Controller
 
     public function index(Request $r)
     {
-        $q = MobileOut::with([
-            'mobileIn:id,store_id,device_id,color_id,storage_id,imei,is_sold',
-            'mobileIn.device:id,name',
-            'mobileIn.color:id,vi_name',
-            'mobileIn.storage:id,name,size_gb',
-            'user:id,name',
-            'customer:id,name,phone'
-        ]);
+        $q     = trim((string) $r->input('q', ''));
+        $limit = max(1, (int) $r->input('limit', 50));
 
-        if ($s = trim((string)$r->input('q'))) {
-            $q->whereHas('mobileIn', fn($w)=>$w->where('imei','like',"%{$s}%"));
-        }
-        if ($r->filled('store_id')) {
-            $q->whereHas('mobileIn', fn($w)=>$w->where('store_id', $r->input('store_id')));
-        }
-        if ($f = $r->input('date_from')) $q->whereDate('export_date','>=',$f);
-        if ($t = $r->input('date_to'))   $q->whereDate('export_date','<=',$t);
+        $rows = MobileOut::query()
+            ->with(['mobileIn.device', 'mobileIn.color', 'mobileIn.storage', 'customer'])
+            ->when($q !== '', function ($query) use ($q) {
+                $like = "%{$q}%";
+                $query->where(function ($w) use ($like) {
+                    $w->whereHas('mobileIn.device', fn($qq) => $qq->where('name', 'like', $like))
+                      ->orWhereHas('customer', fn($qq) => $qq->where('name', 'like', $like)->orWhere('phone', 'like', $like))
+                      ->orWhere('code', 'like', $like)
+                      ->orWhere('note', 'like', $like);
+                });
+            })
+            ->orderByDesc('id')
+            ->limit($limit)
+            ->get();
 
-        $sortable = ['id','export_date','export_price'];
-        $sortBy = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
-        $sortDir = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
-        $q->orderBy($sortBy, $sortDir);
+        // Chuẩn hoá trả về theo FE
+        $data = $rows->map(function (MobileOut $m) {
+            $mi = $m->mobileIn;
+            $price = (int) ($m->export_price ?? $m->total ?? $m->amount ?? 0);
+            $warranty = (int) ($m->warranty ?? 0);
+            return [
+                'id'             => (int) $m->id,
+                'device_name'    => optional($mi?->device)->name ?? '',
+                'country_code'   => $mi->country_code ?? optional($mi?->device)->country_code,
+                'storage_gb'     => (int) ($mi?->storage?->size_gb ?? 0),
+                'color_name'     => $mi?->color?->vi_name ?? $mi?->color?->name,
+                'customer_name'  => optional($m->customer)->name,
+                'customer_phone' => optional($m->customer)->phone,
+                'sale_date'      => $m->sale_date ?? $m->created_at,
+                'price'          => $price,
+                'note'           => $m->note,
+                'warranty'      => $warranty,
+                // optional raw nếu muốn FE dùng lại:
+                // 'mobile_in_id' => $m->mobile_in_id,
+                // 'code'         => $m->code,
+            ];
+        });
 
-        $perPage = max(1, min((int)$r->input('perPage', 15), 200));
-        return MobileOutResource::collection($q->paginate($perPage));
+        return response()->json($data);
     }
 
     public function store(MobileOutStoreRequest $r)
@@ -220,6 +237,8 @@ class MobileOutController extends Controller
         // 5) Thêm thông tin chung
         $code         = $sale->code ?? $sale->order_code ?? ('MO-' . $sale->id);
         $date         = $sale->sale_date ?? $sale->created_at;
+        $exspense     = (int) ($sale->expense ?? 0);
+        $warranty     = (int) ($sale->warranty ?? 0);
         $customerName = optional($sale->customer)->name ?? $sale->customer_name ?? null;
 
         // 6) Trả về đúng format mà FE (normalizeMobileOut) đang đọc
@@ -231,7 +250,9 @@ class MobileOutController extends Controller
             'subtotal'      => $salePrice,       // FE sẽ đọc subtotal/total/amount — ở đây trả về subtotal
             'paid'          => $paid,
             'debt'          => $debt,
+            'expense'      => $exspense,
             'date'          => $date,
+            'warranty'     => $warranty,
             'note'          => $sale->note ?? null,
             'user_name'     => optional($sale->user)->name ?? null,
         ]);
@@ -239,19 +260,205 @@ class MobileOutController extends Controller
 
     public function update(MobileOutUpdateRequest $r, $id)
     {
-        $sale = MobileOut::findOrFail($id);
-        $sale->update($r->validated());
-        return new MobileOutResource($sale->load(['mobileIn.device','user','customer']));
+        $storeId = $this->resolveStoreId($r);
+
+        // Phiếu bán thuộc đúng store
+        $sale = MobileOut::with([
+            'mobileIn.device',
+            'mobileIn.color',
+            'mobileIn.storage',
+            'customer',
+            'user',
+        ])->findOrFail($id);
+
+
+        $data = $r->validated();
+
+        // ===== CHUẨN HOÁ SỐ: chỉ export_price =====
+        if (array_key_exists('export_price', $data)) {
+            $v = $data['export_price'];
+            if ($v !== null && $v !== '') {
+                $clean = preg_replace('/[^\d.-]/', '', (string)$v);
+                if ($clean === '' || !is_numeric($clean)) {
+                    return response()->json(['message' => 'Giá xuất không hợp lệ'], 422);
+                }
+                $data['export_price'] = (float) $clean; // đổi (int) nếu cột dùng INT VND
+            } else {
+                $data['export_price'] = null; // tuỳ schema
+            }
+        }
+
+        // ===== CHUẨN HOÁ export_date =====
+        if (array_key_exists('export_date', $data) && $data['export_date'] !== null && $data['export_date'] !== '') {
+            try {
+                $v = $data['export_date'];
+
+                if ($v instanceof \DateTimeInterface) {
+                    $data['export_date'] = \Carbon\Carbon::instance($v)->toDateString();
+                } elseif (is_int($v) || (is_string($v) && ctype_digit(trim($v)))) {
+                    $data['export_date'] = \Carbon\Carbon::createFromTimestamp((int)$v, config('app.timezone'))->toDateString();
+                } else {
+                    $s = trim((string)$v);
+                    try {
+                        $dt = \Carbon\Carbon::createFromFormat('Y-m-d', $s, config('app.timezone'));
+                        if ($dt && $dt->format('Y-m-d') === $s) {
+                            $data['export_date'] = $dt->toDateString();
+                        } else {
+                            $data['export_date'] = \Carbon\Carbon::parse($s, config('app.timezone'))->toDateString();
+                        }
+                    } catch (\Throwable $e) {
+                        $data['export_date'] = \Carbon\Carbon::parse($s, config('app.timezone'))->toDateString();
+                    }
+                }
+            } catch (\Throwable $e) {
+                return response()->json([
+                    'message' => 'Ngày xuất không hợp lệ',
+                    'input'   => ['export_date' => $data['export_date']],
+                ], 422);
+            }
+        }
+
+        // ===== Chuẩn hoá debt (nếu có) =====
+        $incomingDebt = null;
+        if ($r->has('debt')) {
+            $val = trim((string)$r->input('debt', ''));
+            $incomingDebt = $val === '' ? 0.0 : (float)preg_replace('/[^\d.-]/', '', $val);
+            if ($incomingDebt < 0) $incomingDebt = 0.0;
+        }
+
+        \DB::transaction(function () use ($r, $storeId, $sale, &$data, $incomingDebt) {
+            // ===== CUSTOMER =====
+            if ($r->filled('customer_id')) {
+                $customer = Customer::where('store_id', $storeId)
+                    ->where('id', (int)$r->input('customer_id'))
+                    ->first();
+
+                if (!$customer) {
+                    abort(response()->json(['message' => 'Khách hàng không thuộc cửa hàng này'], 422));
+                }
+
+                $name  = trim((string)$r->input('customer_name', ''));
+                $phone = trim((string)$r->input('phone_number', ''));
+                $patch = [];
+                if ($name !== ''  && $name  !== $customer->name)           $patch['name']  = $name;
+                if ($phone !== '' && $phone !== (string)$customer->phone)  $patch['phone'] = $phone;
+                if ($patch) $customer->update($patch);
+
+                $data['customer_id'] = $customer->id;
+            } else {
+                $name  = trim((string)$r->input('customer_name', ''));
+                $phone = trim((string)$r->input('phone_number', ''));
+
+                if ($phone === '') {
+                    abort(response()->json(['message' => 'Khách hàng không có số điện thoại'], 422));
+                }
+
+                $customer = Customer::where('store_id', $storeId)
+                    ->where('phone', $phone)
+                    ->first();
+
+                if ($customer) {
+                    // Dùng lại; cập nhật name nếu khác
+                    if ($name !== '' && $name !== $customer->name) {
+                        $customer->update(['name' => $name]);
+                    }
+                } else {
+                    // Không tìm thấy theo phone -> tạo mới
+                    $customer = Customer::create([
+                        'store_id' => $storeId,
+                        'name'     => $name !== '' ? $name : 'Khách lẻ',
+                        'phone'    => $phone,
+                    ]);
+                }
+
+                $data['customer_id'] = $customer->id;
+            }
+
+            // Ghi nhận user sửa
+            if ($r->user()) $data['user_id'] = $r->user()->id;
+
+            // Không cho sửa các field nhạy cảm từ client
+            unset($data['store_id'], $data['mobile_in_id']);
+
+            // ===== UPDATE MOBILE OUT =====
+            $sale->update($data);
+
+            // ===== DEBT (mỗi mobile_out_id tối đa 1 khoản nợ) =====
+            if ($incomingDebt !== null) {
+                // Xoá nợ cũ theo mobile_out_id
+                Debt::where('mobileout_id', $sale->id)->delete();
+
+                if ($incomingDebt > 0) {
+                    $debtDate = $r->filled('debt_date')
+                        ? \Carbon\Carbon::parse($r->input('debt_date'))->toDateString()
+                        : \Carbon\Carbon::now()->toDateString(); // nếu cột 'date' là DATE
+
+                    Debt::create([
+                        'customer_id'   => $data['customer_id'] ?? $sale->customer_id,
+                        'mobileout_id' => $sale->id,
+                        'debt'          => $incomingDebt,
+                        'date'          => $debtDate,
+                        'note'          => $r->input('debt_note') ?: ('Nợ phát sinh từ bán máy #' . $sale->id),
+                    ]);
+                }
+            }
+        });
+
+        return new MobileOutResource(
+            $sale->fresh()->load([
+                'mobileIn.device',
+                'mobileIn.color',
+                'mobileIn.storage',
+                'user:id,name',
+                'customer:id,name,phone',
+                // 'debt' // nếu có quan hệ hasOne trên MobileOut
+            ])
+        );
     }
 
     public function destroy($id)
     {
-        $sale = MobileOut::findOrFail($id);
-        $mobId = $sale->mobile_in_id;
-        $sale->delete();
-        $mob = MobileIn::find($mobId);
-        if ($mob) { $mob->is_sold = 0; $mob->save(); }
-        return response()->json(['message'=>'Đã xoá hoá đơn bán và hoàn trạng thái máy về chưa bán.']);
+        $out = MobileOut::with('mobileIn')->findOrFail($id);
+
+        DB::transaction(function () use ($out) {
+            // 1) Xoá công nợ liên quan nếu có
+            if (Schema::hasTable('debts')) {
+                // Tự dò cột liên kết đến mobile_out: ưu tiên mobile_out_id > sale_id
+                $refCol = null;
+                if (Schema::hasColumn('debts', 'mobile_out_id')) {
+                    $refCol = 'mobile_out_id';
+                } elseif (Schema::hasColumn('debts', 'sale_id')) {
+                    $refCol = 'sale_id';
+                }
+
+                if ($refCol) {
+                    // Lấy tất cả debts liên quan
+                    $debtIds = DB::table('debts')->where($refCol, $out->id)->pluck('id');
+                    if ($debtIds->isNotEmpty()) {
+                        // Xoá payments trước, rồi delete debts
+                        if (Schema::hasTable('debt_payments')) {
+                            DB::table('debt_payments')->whereIn('debt_id', $debtIds)->delete();
+                        }
+                        DB::table('debts')->whereIn('id', $debtIds)->delete();
+                    }
+                }
+            }
+
+            // 2) Khôi phục trạng thái Mobile_In (nếu có)
+            if ($out->mobileIn) {
+                $miId = $out->mobileIn->id;
+                $imei = $out->mobileIn->imei ?? $out->mobileIn->mb_imei ?? null;
+
+                $update = ['is_sold' => 0];
+
+                DB::table('mobile_in')->where('id', $miId)->update($update);
+            }
+
+            // 3) Xoá đơn bán
+            $out->delete();
+        });
+
+        return response()->json(['message' => 'Đã xoá đơn bán và công nợ liên quan.']);
     }
 
     private function resolveStoreId(Request $r): int

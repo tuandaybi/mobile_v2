@@ -18,6 +18,7 @@ import {
   DatabaseOutlined,
   LogoutOutlined,
   ShopOutlined,
+  TeamOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -68,6 +69,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
       children: [
         { key: '/admin/users', icon: <UserOutlined />, label: 'Quản lý user' },
         { key: '/admin/stores', icon: <ShopOutlined />, label: 'Quản lý cửa hàng' },
+        { key: '/admin/customers', icon: <TeamOutlined />, label: 'Quản lý khách hàng' },
         { key: '/admin/devices', icon: <AppstoreOutlined />, label: 'Quản lý sản phẩm' },
         { key: '/admin/colors', icon: <BgColorsOutlined />, label: 'Quản lý màu sản phẩm' },
         { key: '/admin/backups', icon: <DatabaseOutlined />, label: 'Quản lý sao lưu' },

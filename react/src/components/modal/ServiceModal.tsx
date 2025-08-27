@@ -85,7 +85,7 @@ export default function ServiceModal() {
 
       service_price: Number(r.price ?? r.service_price ?? 0),
       expense: Number(r.cost ?? r.expense ?? 0),
-      debt: modal.isEdit ? undefined : Number(r.debt ?? 0),
+      debt: Number(r.debt ?? 0),
 
       service_date: parseServiceDate(r.service_date ?? r.date ?? ''),
       warranty: monthsFromLabel(r.warranty ?? ''),
@@ -206,7 +206,6 @@ export default function ServiceModal() {
       };
 
       if (modal.isEdit && modal.record?.id) {
-        delete payload.debt; 
         await api.put(`/services/${modal.record.id}`, payload);
         message.success('Cập nhật dịch vụ thành công');
       } else {
@@ -327,7 +326,6 @@ export default function ServiceModal() {
           />
         </Form.Item>
 
-        {!modal.isEdit && (
           <Form.Item
             label="Nợ lại"
             name="debt"
@@ -340,7 +338,6 @@ export default function ServiceModal() {
               parser={parseNumber}
             />
           </Form.Item>
-        )}
 
         <Form.Item label="Ngày bán" name="service_date">
           <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />

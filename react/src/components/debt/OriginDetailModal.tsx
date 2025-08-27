@@ -109,7 +109,7 @@ const OriginDetailModal: React.FC<Props> = ({
           return (
             <>
               <Descriptions bordered size="small" column={1}>
-                <Descriptions.Item label="Mã đơn">{d.code || `MO ID -${d.id}`}</Descriptions.Item>
+                <Descriptions.Item label="Mã đơn">{d.code || `Mobile ID -${d.id}`}</Descriptions.Item>
                 <Descriptions.Item label="Ngày">{fmtDate(d.date)}</Descriptions.Item>
                 <Descriptions.Item label="Khách hàng">{d.customer_name || '—'}</Descriptions.Item>
                 <Descriptions.Item label="Ghi chú">{d.note || '—'}</Descriptions.Item>
