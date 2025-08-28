@@ -15,29 +15,35 @@ class CustomerController extends Controller
     public function index(Request $r)
     {
         $storeId = $this->resolveStoreId($r);
+        $q = Customer::query()->where('store_id', $storeId);
 
-        $q = Customer::where('store_id', $storeId);
+        $search = trim((string) $r->query('search', $r->query('q', ''))); // ưu tiên ?search=..., fallback ?q=...
+        $limit  = (int) $r->query('limit', 15);
+        $limit  = max(1, min($limit, 15)); // giới hạn an toàn
 
-        if ($s = trim((string)$r->input('q'))) {
-            $q->where(function($w) use ($s) {
-                $w->where('name','like',"%{$s}%")
-                  ->orWhere('phone','like',"%{$s}%");
+        $q = Customer::query()
+        ->where('store_id', $storeId)
+        ->when($search !== '', function ($w) use ($search) {
+            $like = "%{$search}%";
+            $w->where(function ($x) use ($like) {
+                $x->where('name',  'like', $like)
+                  ->orWhere('phone','like', $like);
             });
-        }
+        })
+        ->orderByDesc('id')
+        ->limit($limit);
 
-        if ($r->filled('debt_min')) $q->where('debt', '>=', (float)$r->input('debt_min'));
-        if ($r->filled('debt_max')) $q->where('debt', '<=', (float)$r->input('debt_max'));
-
-        if ($f = $r->input('date_from')) $q->whereDate('created_at','>=',$f);
-        if ($t = $r->input('date_to'))   $q->whereDate('created_at','<=',$t);
-
-        $sortable = ['id','name','phone','debt','created_at'];
-        $sortBy = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
+        // --- sort ---
+        $sortable = ['id','name','phone','created_at'];
+        $sortBy  = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
         $sortDir = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
-        $q->orderBy($sortBy, $sortDir);
 
-        $perPage = max(1, min((int)$r->input('perPage', 15), 200));
-        return response()->json($q->paginate($perPage));
+
+        // --- paginate bình thường ---
+        $perPage = max(1, min((int) $r->input('perPage', 15), 200));
+        return response()->json(
+            $q->paginate($perPage)
+        );
     }
 
     // POST /customers
@@ -48,7 +54,7 @@ class CustomerController extends Controller
         $data = $r->validate([
             'name'        => ['required','string','max:255'],
             'phone'       => ['nullable','string','max:20',
-                Rule::unique('customer','phone')->where(fn($q)=>$q->where('store_id',$storeId))],
+                Rule::unique('customers','phone')->where(fn($q)=>$q->where('store_id',$storeId))],
             'social_link' => ['nullable','string','max:255'],
             'debt'        => ['nullable','numeric','min:0'],
             'note'        => ['nullable','string'],

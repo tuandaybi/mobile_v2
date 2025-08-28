@@ -105,7 +105,7 @@ export default function ServiceModal() {
   const fetchCustomers = async (q: string) => {
     try {
       setOptionsLoading(true);
-      const res = await api.get('/admin/customers', { params: { search: q, limit: 10 } });
+      const res = await api.get('/admin/customers', { params: { search: q, limit: 5 } });
       const rows: CustomerRow[] = (Array.isArray(res.data?.data) ? res.data.data : Array.isArray(res.data) ? res.data : []).map((c: any) => ({
         id: Number(c.id),
         name: c.name ?? c.fullname ?? c.customer_name ?? '',
