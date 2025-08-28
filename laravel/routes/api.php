@@ -74,7 +74,10 @@ Route::middleware(['auth:sanctum'])
         Route::apiResource('colors', ColorController::class);
 
         //Admin -> Backups
-        Route::apiResource('backups', BackupController::class);
+        Route::get('backups', [BackupController::class, 'index']);
+        Route::post('backups', [BackupController::class, 'create']);
+        Route::get('backups/download/{id}', [BackupController::class, 'download']);
+        Route::delete('backups/{id}', [BackupController::class, 'destroy']);
 
         // Suppliers
         //Route::apiResource('suppliers', SupplierController::class)->except(['create','edit']);

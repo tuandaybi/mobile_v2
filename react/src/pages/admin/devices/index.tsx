@@ -18,8 +18,8 @@ import PageTable from "@/components/shared/PageTable";
 
 interface Device {
   id: number;
-  device_code: string;
-  device_name: string;
+  code: string;
+  name: string;
   sort_order: number;
   is_active: boolean;
 }
@@ -37,7 +37,7 @@ export default function DevicePage(): JSX.Element {
     try {
       setLoading(true);
       const response = await api.get('/admin/devices');
-      setData(response.data);
+      setData(response.data.data);
     } catch (error) {
       message.error('Lỗi khi tải danh sách thiết bị');
     } finally {
@@ -52,8 +52,8 @@ export default function DevicePage(): JSX.Element {
 
   const filteredData = data.filter(
     (p) =>
-      p.device_code.toLowerCase().includes(searchText.toLowerCase()) ||
-      p.device_name.toLowerCase().includes(searchText.toLowerCase())
+      p.code.toLowerCase().includes(searchText.toLowerCase()) ||
+      p.name.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const openAddModal = () => {
@@ -105,8 +105,8 @@ export default function DevicePage(): JSX.Element {
 
   const columns: ColumnsType<Device> = [
     { title: "ID", dataIndex: "id", key: "id", width: 70 },
-    { title: "Mã thiết bị", dataIndex: "device_code", key: "device_code" },
-    { title: "Tên thiết bị", dataIndex: "device_name", key: "device_name" },
+    { title: "Mã thiết bị", dataIndex: "code", key: "device_code" },
+    { title: "Tên thiết bị", dataIndex: "name", key: "device_name" },
     { title: "Thứ tự", dataIndex: "sort_order", key: "sort_order", width: 100, sorter: (a, b) => a.sort_order - b.sort_order, align: "center" },
     {
       title: "Kích hoạt",
@@ -158,13 +158,28 @@ export default function DevicePage(): JSX.Element {
           onCancel={() => setIsModalOpen(false)}
           okText="Lưu"
           cancelText="Hủy"
+          afterOpenChange={(open) => {
+            if (open) {
+              if (editingDevice) {
+                console.log('editingDevice', editingDevice);
+                form.setFieldsValue({
+                  code: editingDevice.code,
+                  name: editingDevice.name,
+                  sort_order: editingDevice.sort_order,
+                  is_active: editingDevice.is_active,
+                });
+              } else {
+                form.resetFields();
+              }
+            }
+          }}
         >
           <Form form={form} layout="vertical" initialValues={{ is_active: true, sort_order: data.length ? Math.max(...data.map(d => d.sort_order)) + 1 : 1 }}>
-            <Form.Item name="device_code" label="Mã thiết bị" rules={[{ required: true, message: "Nhập mã thiết bị" }]}>
+            <Form.Item name="code" label="Mã thiết bị" rules={[{ required: true, message: "Nhập mã thiết bị" }]}>
               <Input />
             </Form.Item>
 
-            <Form.Item name="device_name" label="Tên thiết bị">
+            <Form.Item name="name" label="Tên thiết bị">
               <Input />
             </Form.Item>
 

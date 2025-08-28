@@ -1,6 +1,6 @@
 import { Card, Input, Space, Table } from "antd";
 import type { ReactNode } from "react";
-import type { ColumnsType } from "antd/es/table";
+import type { ColumnsType, TablePaginationConfig, TableProps } from "antd/es/table";
 import type { SpinProps } from "antd";
 
 type PageTableProps<T extends { id?: string | number }> = {
@@ -9,6 +9,7 @@ type PageTableProps<T extends { id?: string | number }> = {
   columns: ColumnsType<T>;
   rowKey?: string | ((record: T) => string);
   pageSize?: number;
+  /** Server search */
   onSearch?: (value: string) => void;
   searchPlaceholder?: string;
   extra?: ReactNode;
@@ -17,6 +18,19 @@ type PageTableProps<T extends { id?: string | number }> = {
   loading?: boolean | SpinProps;
   /** skeleton cho Card */
   cardLoading?: boolean;
+
+  /** --- Server pagination --- */
+  current?: number;
+  total?: number;
+  showSizeChanger?: boolean;
+  pageSizeOptions?: Array<number | string>;
+  onPageChange?: (page: number, pageSize: number) => void;
+
+  /** --- Table onChange để bắt sort/filter --- */
+  onTableChange?: TableProps<T>["onChange"];
+  showTotal?:
+    | boolean
+    | ((total: number, range: [number, number]) => ReactNode);
 };
 
 export default function PageTable<T extends { id?: string | number }>(
@@ -34,9 +48,34 @@ export default function PageTable<T extends { id?: string | number }>(
     scrollX = "max-content",
     loading = false,
     cardLoading = false,
+
+    // server pagination
+    current,
+    total,
+    showSizeChanger = true,
+    pageSizeOptions = [10, 15, 20, 50, 100],
+    onPageChange,
+
+    onTableChange,
+    showTotal = true,
   } = props;
 
   const isSpinning = typeof loading === "boolean" ? loading : !!loading?.spinning;
+
+  const pagination: TablePaginationConfig = {
+    current,
+    pageSize,
+    total,
+    showSizeChanger,
+    pageSizeOptions: pageSizeOptions.map(String),
+    onChange: onPageChange,
+    showTotal:
+      showTotal === true
+        ? (t, r) => `${r[0]}-${r[1]} / ${t}`
+        : typeof showTotal === "function"
+        ? showTotal
+        : undefined,
+  };
 
   return (
     <Card title={title} extra={extra} loading={cardLoading}>
@@ -56,11 +95,12 @@ export default function PageTable<T extends { id?: string | number }>(
         dataSource={data}
         columns={columns}
         rowKey={rowKey}
-        pagination={{ pageSize }}
         bordered
         rowClassName={() => "hoverable-row"}
         scroll={{ x: scrollX }}
         loading={loading}
+        pagination={pagination}
+        onChange={onTableChange}
       />
     </Card>
   );
