@@ -1,12 +1,22 @@
 <?php
 namespace App\Http\Requests;
 
+use App\Http\Controllers\Concerns\ResolvesStore;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
 class CustomerUpdateRequest extends FormRequest
 {
+    use ResolvesStore;
+
     public function authorize(): bool { return true; }
+
+    protected function prepareForValidation(): void
+    {
+        $sid = $this->resolveStoreId($this);
+        if ($sid) $this->merge(['store_id' => $sid]);
+    }
+    
     public function rules(): array {
         $storeId = (int)($this->input('store_id') ?: 0);
         $id = $this->route('id') ?? $this->route('customer');

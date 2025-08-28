@@ -33,8 +33,8 @@ class Customer extends Model
     }
 
     /** Nếu nhận máy cũ (trade-in) */
-    public function tradeInMobileIns(): HasMany
-    {
-        return $this->hasMany(MobileIn::class);
-    }
+    // public function tradeInMobileIns(): HasMany
+    // {
+    //     return $this->hasMany(MobileIn::class);
+    // }
 }

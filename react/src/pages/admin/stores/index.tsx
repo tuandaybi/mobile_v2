@@ -51,7 +51,7 @@ export default function StoresPage() {
   const fetchStores = async () => {
     try {
       setLoading(true);
-      const res = await api.get("/admin/stores"); // {stores, users}
+      const res = await api.get("admin/stores"); // {stores, users}
       const stores: Store[] = Array.isArray(res.data?.stores) ? res.data.stores : [];
       const users: User[] = Array.isArray(res.data?.users) ? res.data.users : [];
       setData(stores);

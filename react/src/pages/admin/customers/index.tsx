@@ -1,6 +1,6 @@
 import MainLayout from "../../../components/layout/MainLayout";
-import { useState, useEffect } from 'react';
-import api from '../../../../axiosConfig'; // Import axios config
+import { useState, useEffect } from "react";
+import api from "../../../../axiosConfig";
 import PageTable from "@/components/shared/PageTable";
 
 import {
@@ -9,228 +9,227 @@ import {
   Modal,
   Form,
   Input,
-  Select,
   Popconfirm,
   message,
   Tag,
 } from "antd";
-import {
-  EditOutlined,
-  DeleteOutlined,
-  PlusOutlined,
-  CheckOutlined,
-  StopOutlined,
-} from "@ant-design/icons";
+import { EditOutlined, DeleteOutlined, PlusOutlined } from "@ant-design/icons";
 
-
-interface User {
+type Customer = {
   id: number;
+  store_id: number;
   name: string;
-  email: string;
-  role: string;
-  permissions: string[];
-  is_active: boolean;
-}
+  phone?: string | null;
+  social_link?: string | null;
+  note?: string | null;
+  created_at?: string | null; // ISO string
+};
 
-export default function UsersPage() {
-  const [form] = Form.useForm();
+export default function CustomersPage() {
+  const [form] = Form.useForm<Customer>();
   const [search, setSearch] = useState("");
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [allUsers, setAllUsers] = useState<User[]>([]); 
-  const [allRoles, setAllRoles] = useState<string[]>([]); 
-  const [allPermissions, setAllPermissions] = useState<string[]>([]);
-  const [loadingId, setLoadingId] = useState<number | null>(null);
-  const [isModalLoading, setIsModalLoading] = useState(false);
+  const [editing, setEditing] = useState<Customer | null>(null);
+  const [rows, setRows] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const normalizeUser = (u: any) => ({
-    id: u.id,
-    name: u.name,
-    email: u.email,
-    role: u.role ?? u.roles?.[0]?.name ?? "", // ép về string
-    permissions: Array.isArray(u.permissions)
-      ? u.permissions.map((p: any) => (typeof p === 'string' ? p : p.name))
-      : [],
-    is_active: Boolean(u.is_active),
-  });
-
-  useEffect(() => {
-    const fetchData = async () => {
-    setLoading(true);
-      try {
-        // Lấy danh sách users
-        const { data } = await api.get("admin/users");
-        setAllUsers(data.users);
-        setAllRoles(data.roles);
-        setAllPermissions(data.permissions);
-      } catch (err) {
-        message.error("Lỗi khi lấy dữ liệu từ server.");
-      }finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []); 
-
-  const filteredData = allUsers.filter(
-    (user) =>
-      user.name.toLowerCase().includes(search.toLowerCase()) ||
-      user.email.toLowerCase().includes(search.toLowerCase())
-  );
-
-  const openAddModal = () => {
-    setEditingUser(null);
-    form.resetFields();
-    setIsModalOpen(true);
+  const fmtDate = (d?: string | null) => {
+    if (!d) return "—";
+    const dt = new Date(d);
+    if (Number.isNaN(dt.getTime())) return "—";
+    return dt.toLocaleString("vi-VN");
   };
 
-  const openEditModal = (record: User) => {
-    setEditingUser(record);
-    form.setFieldsValue(record);
+  const normalize = (x: any): Customer => ({
+    id: x.id,
+    store_id: x.store_id,
+    name: x.name,
+    phone: x.phone ?? null,
+    social_link: x.social_link ?? null,
+    note: x.note ?? null,
+    created_at: x.created_at ?? null,
+  });
+
+  const fetchCustomers = async (term = "") => {
+    setLoading(true);
+    try {
+      // index() của bạn trả kiểu Resource paginate => data.data
+      const res = await api.get("admin/customers", {
+        params: {
+          q: term || undefined,
+          perPage: 200, // client paginate bằng PageTable
+          sortBy: "id",
+          sortDir: "desc",
+        },
+      });
+      const list: any[] = Array.isArray(res.data?.data) ? res.data.data : (Array.isArray(res.data) ? res.data : []);
+      setRows(list.map(normalize));
+    } catch (e: any) {
+      console.error(e);
+      message.error(
+        e?.response?.data?.message || "Lỗi khi tải danh sách khách hàng"
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCustomers();
+  }, []);
+
+  const filtered = rows.filter(
+    (c) =>
+      c.name.toLowerCase().includes(search.toLowerCase()) ||
+      (c.phone || "").toLowerCase().includes(search.toLowerCase())
+  );
+
+  const openAdd = () => {
+    setEditing(null);
     setIsModalOpen(true);
+    setTimeout(() => {
+      form.resetFields();
+      form.setFieldsValue({
+        name: '',
+        phone: undefined,
+        social_link: undefined,
+        note: undefined,
+      });
+    }, 0);
+  };
+
+  const openEdit = (rec: Customer) => {
+    setEditing(rec);
+    setIsModalOpen(true);
+    // chờ modal render xong tick kế tiếp rồi set form
+    setTimeout(() => {
+      form.setFieldsValue({
+        name: rec.name,
+        phone: rec.phone ?? undefined,
+        social_link: rec.social_link ?? undefined,
+        note: rec.note ?? undefined,
+      });
+    }, 0);
   };
 
   const handleSave = async () => {
     try {
-        const values = await form.validateFields();
-        setIsModalLoading(true); // Bắt đầu loading
-        
-        if (editingUser) {
-            const response = await api.put(`admin/user/${editingUser.id}`, values);
-            const updatedUser = normalizeUser(response.data.user);
-            setAllUsers(prev =>
-              prev.map(u => String(u.id) === String(updatedUser.id) ? { ...u, ...updatedUser } : u)
-            );
-            message.success("Cập nhật user thành công");
-        } else {
-            const response = await api.post('admin/user', values);
-            const newUser = normalizeUser(response.data.user);
-            setAllUsers(prev => [...prev, newUser]);
-            message.success("Thêm user thành công");
-        }
-        
-        setIsModalOpen(false);
-    }catch (error: any) {
-    console.error("Lỗi khi lưu user:", error);
+      const values = await form.validateFields();
+      setSaving(true);
 
-    if (error.response) {
-        // Lỗi từ Laravel (status 4xx, 5xx)
-        const errMsg = error.response.data?.message 
-            || error.response.data?.error
-            || 'Đã xảy ra lỗi khi lưu user.';
-        message.error(errMsg);
-    } else if (error.request) {
-        // Request đã gửi nhưng không có phản hồi
-        message.error('Không nhận được phản hồi từ server.');
-    } else {
-        // Lỗi khi chuẩn bị request
-        message.error('Có lỗi xảy ra khi gửi yêu cầu.');
-    }
+      if (editing) {
+        const res = await api.put(`admin/customers/${editing.id}`, values);
+        const cu = normalize(res.data?.data ?? res.data);
+        setRows((prev) => prev.map((x) => (x.id === cu.id ? cu : x)));
+        message.success("Cập nhật khách hàng thành công");
+      } else {
+        const res = await api.post("admin/customers", values);
+        const cu = normalize(res.data?.data ?? res.data);
+        setRows((prev) => [cu, ...prev]);
+        message.success("Thêm khách hàng thành công");
+      }
+
+      setIsModalOpen(false);
+    } catch (e: any) {
+      // gom lỗi validation 422 nếu có
+      const data = e?.response?.data;
+      let firstError: string | undefined;
+      if (
+        data?.errors &&
+        typeof data.errors === "object" &&
+        !Array.isArray(data.errors)
+      ) {
+        const errorValues = Object.values(data.errors);
+        if (Array.isArray(errorValues) && errorValues.length > 0 && Array.isArray(errorValues[0])) {
+          firstError = (errorValues[0] as string[])[0];
+        }
+      }
+      firstError = firstError || data?.message || "Lỗi khi lưu khách hàng";
+      message.error(String(firstError));
     } finally {
-        setIsModalLoading(false); // Kết thúc loading dù thành công hay thất bại
+      setSaving(false);
     }
-};
-
-  const handleDelete = async(id: number) => {
-    try{
-      
-      await api.delete(`admin/user/${id}`);
-      setAllUsers((prev) => prev.filter((user) => user.id !== id));
-      message.success("Xóa user thành công");
-    }catch (error: unknown) {
-      if (error instanceof Error) {
-            message.error(error.message || "Đã xảy ra lỗi khi xóa user.");
-        } else {
-            message.error("Đã xảy ra lỗi khi lưu user.");
-        }
-        console.error("Lỗi khi xóa user:", error);
-    }
-
   };
 
-  const handleSearch = (value: string) => {
-      setSearch(value);
-  };
-
-  const toggleActive = async (id: number) => {
+  const handleDelete = async (id: number) => {
     try {
-      setLoadingId(id);
-      const response = await api.put(`/admin/user/${id}/active`);
-      const updatedUser = normalizeUser(response.data.user);
-      setAllUsers(prev =>
-        prev.map(u => String(u.id) === String(id) ? { ...u, ...updatedUser } : u)
+      await api.delete(`admin/customers/${id}`);
+      setRows((prev) => prev.filter((x) => x.id !== id));
+      message.success("Đã xoá khách hàng");
+    } catch (e: any) {
+      message.error(
+        e?.response?.data?.message || "Không thể xoá khách hàng"
       );
-      message.success("Cập nhật trạng thái thành công");
-    } catch (error) {
-      message.error("Lỗi khi cập nhật trạng thái.");
-      console.error(error);
-    }finally {
-      setLoadingId(null); // Kết thúc loading
     }
+  };
+
+  const handleSearch = (v: string) => {
+    setSearch(v);
+    // nếu muốn search server-side theo gõ:
+    // fetchCustomers(v);
   };
 
   const columns = [
+    { title: "Tên KH", dataIndex: "name", key: "name" },
     {
-      title: "Họ tên",
-      dataIndex: "name",
-      sorter: (a: User, b: User) => a.name.localeCompare(b.name),
-    },
-    { title: "Email", dataIndex: "email" },
-    {
-      title: "Role",
-      dataIndex: "role", // hoặc render từ roles nếu đổi shape
-      render: (_: any, record: any) => (
-        Array.isArray(record.roles)
-          ? record.roles.map((r: any) => <Tag key={r.name}>{r.name}</Tag>)
-          : <Tag>{record.role}</Tag>
-      )
+      title: "SĐT",
+      dataIndex: "phone",
+      key: "phone",
+      render: (v: string | null) => v || "—",
     },
     {
-      title: "Trạng thái",
-      dataIndex: "is_active",
-      render: (is_active: User['is_active']) =>
-        is_active ? (
-          <Tag color="green">Đã duyệt</Tag>
+      title: "Mạng xã hội",
+      dataIndex: "social_link",
+      key: "social_link",
+      render: (v: string | null) =>
+        v ? (
+          /^https?:\/\//i.test(v) ? (
+            <a href={v} target="_blank" rel="noreferrer">
+              {v}
+            </a>
+          ) : (
+            <Tag>{v}</Tag>
+          )
         ) : (
-          <Tag color="orange">Chưa duyệt</Tag>
+          "—"
         ),
     },
     {
+      title: "Ghi chú",
+      dataIndex: "note",
+      key: "note",
+      ellipsis: true,
+      render: (v: string | null) => v || "—",
+    },
+    {
+      title: "Tạo lúc",
+      dataIndex: "created_at",
+      key: "created_at",
+      render: (v: string | null) => fmtDate(v),
+      width: 170,
+    },
+    {
       title: "Hành động",
-      render: (_: any, record: User) => (
+      key: "actions",
+      render: (_: any, rec: Customer) => (
         <Space.Compact>
           <Button
             icon={<EditOutlined />}
-            onClick={() => openEditModal(record)}
             size="small"
             type="primary"
+            onClick={() => openEdit(rec)}
           >
             Sửa
           </Button>
           <Popconfirm
-            title="Xóa user này?"
-            onConfirm={() => handleDelete(record.id)}
+            title= "Xoá khách hàng này?"
+            onConfirm={() => handleDelete(rec.id)}
           >
-            <Button danger icon={<DeleteOutlined />} 
-                    size="small"
-                    type="primary">
-              Xóa
+            <Button danger icon={<DeleteOutlined />} size="small" type="primary">
+              Xoá
             </Button>
           </Popconfirm>
-          <Button
-            type={record.is_active ? "default" : "primary"}
-            icon={
-              record.is_active ? <StopOutlined /> : <CheckOutlined />
-            }
-            size="small"
-            onClick={() => toggleActive(record.id)}
-            loading={loadingId === record.id} // Thêm thuộc tính loading
-            disabled={loadingId !== null && loadingId !== record.id} 
-          >
-            {record.is_active ? "Hủy duyệt" : "Duyệt"}
-          </Button>
         </Space.Compact>
       ),
     },
@@ -238,69 +237,71 @@ export default function UsersPage() {
 
   return (
     <MainLayout>
-      <div>
-        <PageTable<User>
-          title="Quản lý người dùng"
-          data={filteredData}
-          columns={columns}
-          pageSize={14}
-          rowKey="id"
-          onSearch={handleSearch}      // bỏ prop này nếu không cần search
-          scrollX="max-content"
-          loading={loading}
-          extra={<Button type="primary" icon={<PlusOutlined />} onClick={openAddModal}>Thêm</Button>}
-        />
+      <PageTable<Customer>
+        title="Khách hàng"
+        data={filtered}
+        columns={columns}
+        pageSize={14}
+        rowKey="id"
+        onSearch={handleSearch}
+        scrollX="max-content"
+        loading={loading || saving}
+        extra={
+          <Button type="primary" icon={<PlusOutlined />} onClick={openAdd}>
+            Thêm
+          </Button>
+        }
+      />
 
-        <Modal
-          title={editingUser ? "Sửa User" : "Thêm User"}
-          open={isModalOpen}
-          onOk={handleSave}
-          onCancel={() => setIsModalOpen(false)}
-          confirmLoading={isModalLoading} // Thêm prop này
-        >
-          <Form form={form} layout="vertical">
-            <Form.Item
-              label="Họ tên"
-              name="name"
-              rules={[{ required: true, message: "Nhập họ tên" }]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              label="Email"
-              name="email"
-              rules={[
-                { required: true, message: "Nhập email" },
-                { type: "email", message: "Email không hợp lệ" },
-              ]}
-            >
-              <Input />
-            </Form.Item>
-            <Form.Item
-              label="Role"
-              name="role"
-              rules={[{ required: true, message: "Chọn role" }]}
-            >
-              <Select>
-                {allRoles.map((role) => (
-                  <Select.Option key={role} value={role}>
-                    {role}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-            <Form.Item label="Permissions" name="permissions">
-              <Select mode="multiple" allowClear>
-                {allPermissions.map((perm) => (
-                  <Select.Option key={perm} value={perm}>
-                    {perm}
-                  </Select.Option>
-                ))}
-              </Select>
-            </Form.Item>
-          </Form>
-        </Modal>
-      </div>
+      <Modal
+        open={isModalOpen}
+        title={editing ? "Sửa khách hàng" : "Thêm khách hàng"}
+        onOk={handleSave}
+        onCancel={() => setIsModalOpen(false)}
+        confirmLoading={saving}
+        destroyOnHidden
+        afterOpenChange={(open) => {
+          if (!open) return;
+          const rec = editing;
+          form.setFieldsValue({
+            name: rec?.name ?? '',
+            phone: rec?.phone ?? undefined,
+            social_link: rec?.social_link ?? undefined,
+            note: rec?.note ?? undefined,
+          });
+        }}
+      >
+        <Form form={form} layout="vertical" preserve={false}>
+          <Form.Item
+            label="Tên khách hàng"
+            name="name"
+            rules={[{ required: true, message: "Nhập tên khách hàng" }]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label="Số điện thoại"
+            name="phone"
+            rules={[
+              { max: 20, message: "Tối đa 20 ký tự" },
+              // optional: pattern VN
+              // { pattern: /^(0|\+84)\d{8,11}$/, message: "SĐT không hợp lệ" },
+            ]}
+          >
+            <Input />
+          </Form.Item>
+          <Form.Item
+            label="Link MXH"
+            name="social_link"
+            rules={[{ max: 255, message: "Tối đa 255 ký tự" }]}
+          >
+            <Input placeholder="https://facebook.com/..." />
+          </Form.Item>
+          <Form.Item label="Ghi chú" name="note">
+            <Input.TextArea rows={3} />
+          </Form.Item>
+        </Form>
+      </Modal>
     </MainLayout>
   );
 }

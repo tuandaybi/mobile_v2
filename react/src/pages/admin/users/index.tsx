@@ -30,6 +30,7 @@ interface User {
   role: string;
   permissions: string[];
   is_active: boolean;
+  stores?: { id: number; name: string }[]; // Thêm trường stores
 }
 
 export default function UsersPage() {
@@ -60,7 +61,8 @@ export default function UsersPage() {
     setLoading(true);
       try {
         // Lấy danh sách users
-        const { data } = await api.get("admin/users");
+        const { data } = await api.get("admin/user");
+        //await api.get("admin/taoquyen"); //khởi tạo role và permission - chạy 1 lần :D
         setAllUsers(data.users);
         setAllRoles(data.roles);
         setAllPermissions(data.permissions);
@@ -186,6 +188,14 @@ export default function UsersPage() {
           ? record.roles.map((r: any) => <Tag key={r.name}>{r.name}</Tag>)
           : <Tag>{record.role}</Tag>
       )
+    },
+    {
+      title: "Cửa hàng",
+      dataIndex: "stores",
+      render: (stores: User['stores']) =>
+        Array.isArray(stores)
+          ? stores.map((s: any) => <Tag key={s.id}>{s.name}</Tag>)
+          : null
     },
     {
       title: "Trạng thái",

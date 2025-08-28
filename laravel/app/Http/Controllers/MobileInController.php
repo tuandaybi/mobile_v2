@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use App\Http\Requests\{MobileInStoreRequest, MobileInUpdateRequest};
 use App\Http\Resources\MobileInResource;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 class MobileInController extends Controller
 {
@@ -206,4 +207,49 @@ class MobileInController extends Controller
         return response()->json(['id'=>$mob->id,'is_sold'=>(bool)$mob->is_sold]);
     }
 
+    public function searchImei(Request $r, string $term)
+{
+    $user = $r->user('sanctum') ?? $r->user();
+    if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
+
+    // dò tên cột thật trong pivot
+    $userCol  = Schema::hasColumn('user_in_store','user_id')  ? 'user_id'  : 'id_user';
+    $storeCol = Schema::hasColumn('user_in_store','store_id') ? 'store_id' : 'id_store';
+
+    $storeIds = DB::table('user_in_store')
+        ->where($userCol, $user->id)
+        ->pluck($storeCol)->all();
+
+    if (empty($storeIds)) {
+        return response()->json(['message' => 'User chưa được gán cửa hàng'], 403);
+    }
+
+    $term = trim($term);
+
+    $q = MobileIn::query()
+        ->whereIn('store_id', $storeIds)
+        ->when($term !== '', fn($w) => $w->where('imei', 'like', '%'.$term))
+        // ✅ ghép mobile_out + customer
+        ->with([
+            'device'  => fn($q)=>$q->select('id','name','code'),
+            'color'   => fn($q)=>$q->select('id','vi_name','en_name'),
+            'storage' => fn($q)=>$q->select('id','name','size_gb'),
+            'mobileOut' => fn($q)=>$q
+                ->select('id','mobile_in_id','customer_id','export_date','export_price','payment','warranty','note')
+                ->with(['customer' => fn($c)=>$c->select('id','name','phone')]),
+        ]);
+
+    // tuỳ chọn: ?sold=1|0
+    if ($r->filled('sold')) {
+        $q->where('is_sold', (int)$r->input('sold') ? 1 : 0);
+    }
+
+    $list = $q->orderByDesc('id')->limit(100)->get();
+
+    // Tạm thời trả thẳng JSON để dễ debug FE
+    return response()->json($list);
+
+    // Khi ổn rồi có thể bật Resource nếu muốn:
+    // return MobileInResource::collection($list);
+}
 }

@@ -25,7 +25,7 @@ class MobileOut extends Model
 
     public function mobileIn(): BelongsTo
     {
-        return $this->belongsTo(MobileIn::class);
+        return $this->belongsTo(MobileIn::class, 'mobile_in_id');
     }
 
     public function user(): BelongsTo
@@ -35,6 +35,6 @@ class MobileOut extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class);
+        return $this->belongsTo(Customer::class, 'customer_id');
     }
 }

@@ -3,10 +3,11 @@
 namespace App\Http\Controllers\admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\mobile\Store;
+use App\Models\Store;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use App\Http\Controllers\Concerns\ResolvesStore;
 
 class StoreController extends Controller
 {
@@ -17,12 +18,12 @@ class StoreController extends Controller
     public function index()
     {
         try {
-            $stores = \App\Models\mobile\Store::with(['users:id,name,email'])
+            $stores = Store::with(['users:id,name,email'])
                 ->withCount('users')
                 ->orderBy('id','asc')
                 ->get();
 
-            $allUsers = \App\Models\User::select('id','name','email')
+            $allUsers = User::select('id','name','email')
                 ->orderBy('name')
                 ->get();
 

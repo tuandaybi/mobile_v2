@@ -8,18 +8,23 @@ use Illuminate\Http\Request;
 use App\Models\User;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Models\Permission;
+use App\Http\Controllers\Concerns\ResolvesStore;
 
 
 class UserController extends Controller
 {
     public function index()
     {
-        $users = User::all();
+
+        $users = User::with(['stores:id,name'])
+            ->get();
+
         $roles = Role::pluck('name');
         $permissions = Permission::pluck('name');
+
         return response()->json([
-            'users' => UsersResource::collection($users),
-            'roles' => $roles,
+            'users'       => UsersResource::collection($users),
+            'roles'       => $roles,
             'permissions' => $permissions,
         ]);
     }
@@ -105,8 +110,10 @@ class UserController extends Controller
             'message' => 'Xóa user thành công'
         ], 201);
     }
-    public function defaultRoleAndPermiss(Request $request)
+    public function defaultRoleAndPermiss()
     {
+        $guard = 'web';
+
         $permissions = [
             'trangchinh',
             'dienthoai.xemmua',
@@ -122,10 +129,10 @@ class UserController extends Controller
             'dichvu.sua',
             'dichvu.xoa',
             'congno.xem',
+            'congno.them',
             'congno.sua',
             'congno.xoa',
-            'imei.xemmua',
-            'imei.xemban',
+            'checkimei.xem',
             'baocaoloinhuan.xem',
             'baocaosanluong.xem',
             'admin.users',
@@ -133,17 +140,25 @@ class UserController extends Controller
             'admin.sanpham',
             'admin.mausanpham',
             'admin.saoluu',
+            'admin.cuahang',
+            'admin.khachhang',
         ];
 
-        foreach ($permissions as $permission) {
-            Permission::findOrCreate($permission);
+        // Tạo/cập nhật permissions theo guard web
+        foreach ($permissions as $perm) {
+            Permission::findOrCreate($perm, $guard);
         }
 
-        $roleAdmin = Role::findOrCreate('Admin');
-        $roleAdmin -> givePermissionTo(Permission::all());
+        // Lấy danh sách permission theo guard web
+        $webPerms = Permission::where('guard_name', $guard)->pluck('name')->all();
 
-        $roleQuanly = Role::findOrCreate('Quản lý');
-        $roleQuanly -> givePermissionTo([
+        // Admin: full quyền
+        $roleAdmin = Role::findOrCreate('Admin', $guard);
+        $roleAdmin->syncPermissions($webPerms);
+
+        // Quản lý: subset
+        $roleQuanly = Role::findOrCreate('Quản lý', $guard);
+        $roleQuanly->syncPermissions([
             'trangchinh',
             'dienthoai.xemmua',
             'dienthoai.xemban',
@@ -155,14 +170,18 @@ class UserController extends Controller
             'dichvu.them',
             'dichvu.sua',
             'congno.xem',
-            'imei.xemban',
+            'congno.them',
+            'congno.sua',
+            'checkimei.xem',
             'admin.users',
             'admin.sanpham',
             'admin.mausanpham',
+            'admin.khachhang',
         ]);
 
-        $roleNhanVien = Role::findOrCreate('Nhân viên');
-        $roleNhanVien -> givePermissionTo([
+        // Nhân viên: subset nhỏ hơn
+        $roleNhanVien = Role::findOrCreate('Nhân viên', $guard);
+        $roleNhanVien->syncPermissions([
             'trangchinh',
             'dienthoai.xemmua',
             'dienthoai.xemban',
@@ -174,11 +193,11 @@ class UserController extends Controller
             'dichvu.them',
             'dichvu.sua',
             'congno.xem',
-            'imei.xemban',
+            'congno.them',
+            'congno.sua',
+            'checkimei.xem',
         ]);
 
-        return response()->json([
-            'permissions' => $permissions,
-        ]);
+        return response()->json(['ok' => true]);
     }
 }

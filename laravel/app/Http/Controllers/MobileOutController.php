@@ -20,16 +20,20 @@ class MobileOutController extends Controller
     {
         $q     = trim((string) $r->input('q', ''));
         $limit = max(1, (int) $r->input('limit', 50));
+        $storeId = $this->resolveStoreId($r);
 
         $rows = MobileOut::query()
             ->with(['mobileIn.device', 'mobileIn.color', 'mobileIn.storage', 'customer'])
+            // lọc theo store_id trong bảng mobile_in
+            ->whereHas('mobileIn', fn($qq) => $qq->where('store_id', $storeId))
             ->when($q !== '', function ($query) use ($q) {
                 $like = "%{$q}%";
                 $query->where(function ($w) use ($like) {
                     $w->whereHas('mobileIn.device', fn($qq) => $qq->where('name', 'like', $like))
-                      ->orWhereHas('customer', fn($qq) => $qq->where('name', 'like', $like)->orWhere('phone', 'like', $like))
-                      ->orWhere('code', 'like', $like)
-                      ->orWhere('note', 'like', $like);
+                    ->orWhereHas('customer', fn($qq) => $qq->where('name', 'like', $like)
+                                                            ->orWhere('phone', 'like', $like))
+                    ->orWhere('code', 'like', $like)
+                    ->orWhere('note', 'like', $like);
                 });
             })
             ->orderByDesc('id')
@@ -47,6 +51,7 @@ class MobileOutController extends Controller
                 'country_code'   => $mi->country_code ?? optional($mi?->device)->country_code,
                 'storage_gb'     => (int) ($mi?->storage?->size_gb ?? 0),
                 'color_name'     => $mi?->color?->vi_name ?? $mi?->color?->name,
+                'imei'           => $mi->imei ?? $mi->imei ?? '',
                 'customer_name'  => optional($m->customer)->name,
                 'customer_phone' => optional($m->customer)->phone,
                 'sale_date'      => $m->sale_date ?? $m->created_at,

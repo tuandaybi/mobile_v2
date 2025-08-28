@@ -1,6 +1,7 @@
 <?php
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\admin;
 
+use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\ResolvesStore;
 use App\Models\Customer;
 use Illuminate\Http\Request;
@@ -91,7 +92,7 @@ class CustomerController extends Controller
         $c = Customer::where('store_id',$storeId)->findOrFail($id);
 
         // Nếu còn liên kết -> không xoá
-        if ($c->mobileOuts()->exists() || $c->services()->exists() || $c->tradeInMobileIns()->exists()) {
+        if ($c->mobileOuts()->exists() || $c->services()->exists()) {
             return response()->json(['message'=>'Khách hàng đang được sử dụng. Không thể xoá.'], 409);
         }
 

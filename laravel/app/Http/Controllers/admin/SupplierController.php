@@ -1,6 +1,7 @@
 <?php
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\admin;
 
+use App\Http\Controllers\Controller;
 use App\Http\Controllers\Concerns\ResolvesStore;
 use App\Models\Supplier;
 use Illuminate\Http\Request;

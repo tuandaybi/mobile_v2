@@ -13,6 +13,7 @@ type SoldRow = {
   country_code?: string;   // VN/A, LL/A...
   storage_gb?: number;     // 128
   color_name?: string;     // White
+  imei?: string;          // imei
   customer_name?: string;
   customer_phone?: string;
   sale_date?: string;      // ISO (có thể có microseconds)
@@ -55,10 +56,36 @@ const fmtDate = (v: unknown) => {
   return m.isValid() ? m.format('DD/MM/YYYY') : '—';
 };
 
+const addMonthsEOM = (date: Date, months: number) => {
+  const y = date.getFullYear();
+  const m = date.getMonth();
+  const d = date.getDate();
+
+  const targetMonth = m + months;
+  const targetYear = y + Math.floor(targetMonth / 12);
+  const normMonth = ((targetMonth % 12) + 12) % 12;
+
+  const daysInTarget = new Date(targetYear, normMonth + 1, 0).getDate();
+  const newDay = Math.min(d, daysInTarget);
+  return new Date(targetYear, normMonth, newDay);
+};
+
+const warrantyEndDate = (
+  saleDate?: string | Date | null,
+  months?: number | null
+): Date | null => {
+  if (!saleDate || !months) return null;
+  const base = typeof saleDate === "string" ? new Date(saleDate) : saleDate;
+  if (Number.isNaN(base.getTime())) return null;
+  return addMonthsEOM(base, Number(months));
+};
+
 const currency = (v: any) => {
   const n = Number(v ?? 0);
   return `${n.toLocaleString()} đ`;
 };
+
+
 
 const buildProduct = (r: SoldRow) => {
   const parts = [
@@ -66,6 +93,7 @@ const buildProduct = (r: SoldRow) => {
     r.country_code ? `${r.country_code}` : undefined,
     r.storage_gb ? `${r.storage_gb}GB` : undefined,
     r.color_name ? `(${r.color_name})` : undefined,
+    r.imei ? `${r.imei}` : undefined,
   ].filter(Boolean);
   // iPhone 16 Plus - VN/A - 128GB - (White)
   return parts.join(" - ");
@@ -89,6 +117,7 @@ const SoldMobilesPage: React.FC = () => {
         device_name: x.device_name ?? x.mobile_in?.device?.name ?? "",
         country_code: x.country_code ?? x.mobile_in?.country_code ?? x.device?.country_code,
         storage_gb: Number(x.storage_gb ?? x.mobile_in?.storage?.size_gb ?? x.storage_gb),
+        imei: x.imei ?? x.mobile_in?.imei ?? "",
         color_name: x.color_name ?? x.mobile_in?.color?.vi_name ?? x.color_name,
         customer_name: x.customer_name ?? x.customer?.name,
         customer_phone: x.customer_phone ?? x.customer?.phone,
@@ -154,7 +183,16 @@ const SoldMobilesPage: React.FC = () => {
     { title: "Tên Khách Hàng", dataIndex: "customer_name", key: "customer_name" },
     { title: "SĐT Khách hàng", dataIndex: "customer_phone", key: "customer_phone" },
     { title: "Ngày Bán", dataIndex: "sale_date", key: "sale_date", render: (d) => fmtDate(d) },
-    { title: "Bảo hành", dataIndex: "warranty", key: "warranty", render: (d) => fmtDate(d) },
+    { 
+      title: "Bảo hành", 
+      dataIndex: "warranty", 
+      key: "warranty",
+      render: (m: number | null, row: any) => {
+        if (!m) return "—";
+        const end = warrantyEndDate(row.sale_date, m);
+        return end ? fmtDate(end) : "—";
+      }
+    },
     { title: "Giá Bán", dataIndex: "price", key: "price", render: (p) => currency(p) },
     { title: "Ghi chú", dataIndex: "note", key: "note" },
     {
