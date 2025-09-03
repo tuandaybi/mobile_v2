@@ -11,6 +11,7 @@ import {
   MoneyCollectOutlined,
 } from "@ant-design/icons";
 import ProfileDrawer from '@/components/auth/ProfileDrawer';
+import NotificationDropdown from '@/components/notifi/NotificationDropdown';
 
 const { Header } = Layout;
 
@@ -25,6 +26,7 @@ export interface UserInfo {
   email: string;
   created_at: Date;
   license_expires_at?: string | null; 
+  store_name?: string | null;
 }
 
 const AppHeader: React.FC<AppHeaderProps> = ({}) => {
@@ -174,20 +176,26 @@ const AppHeader: React.FC<AppHeaderProps> = ({}) => {
           </Dropdown>
         </div>
 
-        <Dropdown
-          menu={{
-            items: profileMenuItems,
-            onClick: handleProfileMenuClick,
-          }}
-          placement="bottomRight"
-        >
-          <Space style={{ cursor: "pointer" }}>
-            <UserOutlined />
-            <span id="userName">{userInfo ? userInfo.name : 'Khách'}</span>
-          </Space>
-        </Dropdown>
+        <div style={{ display: "flex", alignItems: "right", gap: 30, justifyContent: "space-end" }}>
+          <div>
+            <Dropdown
+                menu={{
+                  items: profileMenuItems,
+                  onClick: handleProfileMenuClick,
+                }}
+              placement="bottom"
+            >
+              <Space style={{ cursor: "pointer" }}>
+                <UserOutlined />
+                <span id="userName">{userInfo ? userInfo.name : 'Khách'}</span>
+              </Space>
+            </Dropdown>
+          </div>
+          <div>
+            <NotificationDropdown />
+          </div>
+        </div>
       </Header>
-
       <ProfileDrawer
         open={openProfile}
         onClose={() => setOpenProfile(false)}

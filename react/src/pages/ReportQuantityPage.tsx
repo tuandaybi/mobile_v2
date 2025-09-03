@@ -1,6 +1,6 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import MainLayout from "../components/layout/MainLayout";
-import { Row, Col, Card, Select } from "antd";
+import { Row, Col, Card, Select, message, Spin, Statistic } from "antd";
 import {
   BarChart,
   Bar,
@@ -10,68 +10,53 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from "recharts";
+import api from "../../axiosConfig";
 
 const { Option } = Select;
 
-// Mock data sản lượng bán từng model theo tháng
-const mockSalesData = [
-  { year: 2025, month: "1", model: "15 Pro Max", quantity: 5 },
-  { year: 2025, month: "1", model: "14 Pro", quantity: 3 },
-  { year: 2025, month: "1", model: "12", quantity: 2 },
-
-  { year: 2025, month: "2", model: "15 Pro Max", quantity: 8 },
-  { year: 2025, month: "2", model: "14 Pro", quantity: 4 },
-  { year: 2025, month: "2", model: "13 Pro Max", quantity: 1 },
-
-  { year: 2025, month: "3", model: "15 Pro Max", quantity: 6 },
-  { year: 2025, month: "3", model: "15 Plus", quantity: 3 },
-  { year: 2025, month: "3", model: "14 Pro", quantity: 2 },
-];
-
-// Danh sách năm
 const getYearOptions = () => {
   const currentYear = new Date().getFullYear();
-  return [currentYear - 1, currentYear];
+  return [...Array(currentYear - 2020).keys()].map((y) => y + 2021);
 };
+const getMonthOptions = () => [...Array(12).keys()].map((m) => (m + 1).toString());
 
-// Danh sách tháng
-const getMonthOptions = () => {
-  return [...Array(12).keys()].map((m) => (m + 1).toString());
-};
+type ModelQty = { model: string; quantity: number };
 
-const ReportProductionPage: React.FC = () => {
+const ReportProductionPage: React.FC<{}> = () => {
   const currentYear = new Date().getFullYear();
   const currentMonth = (new Date().getMonth() + 1).toString();
 
-  // Mặc định chọn năm và tháng hiện tại
   const [years, setYears] = useState<number[]>([currentYear]);
   const [months, setMonths] = useState<string[]>([currentMonth]);
+  const [data, setData] = useState<ModelQty[]>([]);
+  const [loading, setLoading] = useState(false);
 
-  // Lọc dữ liệu theo nhiều năm / tháng
-  const filteredData = React.useMemo(() => {
-    return mockSalesData.filter(
-      (item) =>
-        years.includes(item.year) &&
-        (months.length === 0 || months.includes(item.month))
-    );
-  }, [years, months]);
+  const totalQty = useMemo(
+    () => data.reduce((acc, cur) => acc + Number(cur?.quantity ?? 0), 0),
+    [data]
+  );
 
-  // Tổng hợp số lượng theo model
-  const aggregatedData = React.useMemo(() => {
-    const mapModelToQuantity: Record<string, number> = {};
+  const load = async () => {
+    setLoading(true);
+    try {
+      const params = {
+        years: years.join(","),   // "2025,2024"
+        months: months.join(","), // "8,7"
+      };
+      const res = await api.get<ModelQty[]>("/reports/sales-models", { params });
+      setData((res.data as any) || []);
+    } catch (e) {
+      console.error(e);
+      message.error("Không tải được báo cáo sản lượng model");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-    filteredData.forEach(({ model, quantity }) => {
-      if (!mapModelToQuantity[model]) {
-        mapModelToQuantity[model] = 0;
-      }
-      mapModelToQuantity[model] += quantity;
-    });
-
-    return Object.entries(mapModelToQuantity).map(([model, quantity]) => ({
-      model,
-      quantity,
-    }));
-  }, [filteredData]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(years), JSON.stringify(months)]);
 
   return (
     <MainLayout>
@@ -84,9 +69,10 @@ const ReportProductionPage: React.FC = () => {
                 <Select
                   mode="multiple"
                   value={years}
-                  onChange={(val) => setYears(val)}
+                  onChange={(val) => setYears(val as number[])}
                   style={{ width: "100%" }}
                   placeholder="Chọn năm"
+                  allowClear
                 >
                   {getYearOptions().map((y) => (
                     <Option key={y} value={y}>
@@ -101,9 +87,10 @@ const ReportProductionPage: React.FC = () => {
                 <Select
                   mode="multiple"
                   value={months}
-                  onChange={(val) => setMonths(val)}
+                  onChange={(val) => setMonths(val as string[])}
                   style={{ width: "100%" }}
                   placeholder="Chọn tháng"
+                  allowClear
                 >
                   {getMonthOptions().map((m) => (
                     <Option key={m} value={m}>
@@ -113,21 +100,34 @@ const ReportProductionPage: React.FC = () => {
                 </Select>
               </Col>
             </Row>
+            <Row>
+              <Col span={24} style={{ display: 'flex', justifyContent: 'center' }}>
+                <div>
+                  <Statistic
+                    title="Tổng số lượng đã bán"
+                    value={totalQty}
+                    suffix="máy"
+                  />
+                </div>
+              </Col>
+            </Row>
 
-            <div style={{ width: "100%", height: 400 }}>
-              <ResponsiveContainer>
-                <BarChart
-                  data={aggregatedData}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="model" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="quantity" fill="#1890ff" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
+            <Spin spinning={loading}>
+              <div style={{ width: "100%", height: 400 }}>
+                <ResponsiveContainer>
+                  <BarChart
+                    data={data}
+                    margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="model" />
+                    <YAxis allowDecimals={false} />
+                    <Tooltip />
+                    <Bar dataKey="quantity" fill="#1890ff" />
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </Spin>
           </Card>
         </Col>
       </Row>

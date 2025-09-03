@@ -2,7 +2,8 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     MobileInController, MobileOutController, PurchaseInvoiceController, 
-    ServiceController, AuthController, DebtController
+    ServiceController, AuthController, DebtController, HomeController,
+    ReportController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -10,9 +11,12 @@ use App\Http\Controllers\admin\{
     SupplierController, UserController
 };
 
+Route::get('/_ping', fn() => response()->json(['ok' => true]));
+
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:10,1');
 Route::post('/register', [AuthController::class, 'store']);
+Route::get('/home', [HomeController::class, 'index'])->middleware('auth:sanctum');
 Route::middleware('auth:sanctum')->group(function () {
     // Profile
     Route::get('/user', [AuthController::class, 'index']);
@@ -42,9 +46,22 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/debts/customer/{customer}', [DebtController::class, 'openDebtsByCustomer']);
     Route::post('/debts/{debt}/pay', [DebtController::class, 'payOne']);
     Route::post('/debts/settle-customer/{customer}', [DebtController::class, 'settleCustomer']);
+    Route::get('/debts/{debt}/payments', [DebtController::class, 'paymentsByDebt']);
 
     //Search Imei
     Route::get('/mobile-in/search-imei/{imei}', [MobileInController::class, 'searchImei']);
+
+    //Report
+    Route::get('/reports/profit-daily', [ReportController::class, 'profitDaily']);
+    Route::get('/reports/sales-models', [ReportController::class, 'salesModels']);
+    Route::get('/reports/debt-summary', [ReportController::class, 'debtSummary']);
+
+    //Notifications
+    Route::get('/inbox',           [InboxController::class, 'index']);     // list + unread count
+    Route::post('/inbox',          [InboxController::class, 'store']);     // tạo log/ann
+    Route::get('/inbox/{id}',      [InboxController::class, 'show']);      // chi tiết + comments
+    Route::post('/inbox/{id}/read',[InboxController::class, 'markRead']);  // đánh dấu đã đọc
+    Route::post('/inbox/{id}/comment',[InboxController::class, 'comment']); // gửi bình luận
 
     // Purchase Invoices
     //Route::apiResource('purchase-invoices', PurchaseInvoiceController::class)->except(['create','edit']);
@@ -64,6 +81,7 @@ Route::middleware(['auth:sanctum'])
 
         //Admin -> Customers
         Route::apiResource('customers', CustomerController::class);
+        Route::get('ad-customers', [CustomerController::class, 'indexAdmin']); // Admin Customer Page
 
         //Admin -> Devices
         Route::apiResource('devices', DeviceController::class);

@@ -1,4 +1,4 @@
-import { Modal, Form, Input, DatePicker, Button, Radio, InputNumber, message, Select, AutoComplete } from 'antd';
+import { Modal, Form, Input, DatePicker, Button, Radio, InputNumber, message, Select, AutoComplete, Spin } from 'antd';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -7,7 +7,7 @@ import api from '../../../axiosConfig';
 
 dayjs.extend(customParseFormat);
 
-type Payment = '0' | '1' | '2'; // 0: chuyển khoản, 1: trả góp, 2: tiền mặt
+type Payment = '0' | '1' | '2'; // 0: CK, 1: trả góp, 2: TM
 
 interface FormValues {
   customer_name: string;
@@ -16,7 +16,7 @@ interface FormValues {
 
   export_price: number;
   expense?: number;
-  debt?: number;
+  debt_amount?: number;
   payment: Payment;
   export_date: Dayjs;
   warranty: number;
@@ -35,7 +35,6 @@ const parseNumber = ((v?: string) => {
 const parseApiDateToDayjs = (s?: string | Dayjs | null) => {
   if (!s) return null;
   if (dayjs.isDayjs(s)) return s;
-  // normalize "2025-08-25T12:02:50.000000Z" -> "...Z"
   const normalized = String(s).replace(/\.\d+Z$/, 'Z');
   const d = dayjs(normalized);
   return d.isValid() ? d : null;
@@ -49,19 +48,21 @@ export default function SellMobileModal() {
   const record  = useModalStore(s => s.sellMobile.record);
   const bump    = useModalStore(s => s.bumpMobilesVersion);
   const close   = useModalStore(s => s.sellMobile.close);
-  const [opened, setOpened] = useState(false);
 
+  const [opened, setOpened] = useState(false);
   const [mobileInId, setMobileInId] = useState<number | undefined>(undefined);
 
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
 
   // tìm khách hàng
-  const [_, setOptionsLoading] = useState(false);
+  const [optionsLoading, setOptionsLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<CustomerRow[]>([]);
   const [isExistingCustomer, setIsExistingCustomer] = useState(false);
   const searchTimer = useRef<number | null>(null);
-  const lastQuery = useRef<string>('');
+
+  // input hiển thị trong AutoComplete (để value option unique mà input chỉ hiện tên)
+  const [customerInput, setCustomerInput] = useState<string>("");
 
   // Warranty options
   const optionsWarranty = useMemo(
@@ -75,7 +76,7 @@ export default function SellMobileModal() {
     return id ? Number(id) : undefined;
   }, [record]);
 
-  // initialValues từ record có sẵn (khi tạo mới hoặc lần mở đầu)
+  // initialValues từ record
   const initialValues: Partial<FormValues> = useMemo(() => {
     const exportDate =
       parseApiDateToDayjs((record as any)?.export_date) ??
@@ -83,14 +84,17 @@ export default function SellMobileModal() {
       parseApiDateToDayjs((record as any)?.date) ??
       dayjs();
 
+    const name = (record as any)?.customer_name ?? '';
+    // sync input hiển thị
+    setCustomerInput(name);
+
     return {
-      customer_name: (record as any)?.customer_name ?? '',
+      customer_name: name,
       customer_id: (record as any)?.customer_id ? Number((record as any)?.customer_id) : null,
       phone_number: (record as any)?.phone_number ?? (record as any)?.customer_phone ?? '',
 
       export_price: toNumber((record as any)?.export_price ?? (record as any)?.price, 0),
       expense:      toNumber((record as any)?.expense ?? (record as any)?.export_cost ?? (record as any)?.cost, 0),
-      // chỉ set debt khi tạo mới (khi edit sẽ ẩn field này)
       debt:         !isEdit ? toNumber((record as any)?.debt, 0) : undefined,
       payment: String((record as any)?.payment ?? '0') as Payment,
       export_date: exportDate!,
@@ -99,7 +103,6 @@ export default function SellMobileModal() {
     };
   }, [isEdit, record]);
 
-  // set flag khách cũ theo initial
   useEffect(() => {
     setIsExistingCustomer(!!initialValues.customer_id);
   }, [initialValues.customer_id]);
@@ -119,21 +122,24 @@ export default function SellMobileModal() {
     (async () => {
       try {
         setLoading(true);
-        const res = await api.get(`/mobile-out/${moId}`); // ✅ đồng bộ prefix
+        const res = await api.get(`/mobile-out/${moId}`);
         const d = res.data || {};
         if (!alive) return;
 
         const miId = d.mobile_in_id ?? d.mobile_in?.id ?? mobileInId ?? null;
         setMobileInId(miId ? Number(miId) : undefined);
 
+        const name = d.customer_name ?? initialValues.customer_name ?? '';
+        setCustomerInput(name);
+
         form.setFieldsValue({
-          customer_name: d.customer_name ?? initialValues.customer_name ?? '',
+          customer_name: name,
           customer_id:   d.customer_id ?? initialValues.customer_id ?? null,
           phone_number:  d.customer_phone ?? initialValues.phone_number ?? '',
           export_price:  toNumber(d.price ?? d.subtotal ?? initialValues.export_price ?? 0),
           expense:       toNumber(d.expense ?? initialValues.expense ?? 0),
           payment:       String(d.payment ?? initialValues.payment ?? '0') as Payment,
-          debt: 0,
+          debt_amount: 0,
           export_date:   parseApiDateToDayjs(d.date) ?? initialValues.export_date ?? dayjs(),
           warranty:      toNumber(d.warranty ?? initialValues.warranty ?? 6),
           note:          d.note ?? initialValues.note ?? '',
@@ -148,6 +154,15 @@ export default function SellMobileModal() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [opened, isEdit, moId]);
 
+  // build options UNIQUE: value = `${name}__#${id}`
+  const buildOptions = (list: CustomerRow[]) =>
+    list.map(s => ({
+      value: `${s.name}__#${s.id}`,
+      label: `${s.name}${s.phone ? ` • ${s.phone}` : ''}`,
+      id: s.id,
+      phone: s.phone,
+    }));
+
   // --- fetch customers (debounce theo tên)
   const fetchCustomers = async (q: string) => {
     try {
@@ -160,7 +175,7 @@ export default function SellMobileModal() {
       }));
       setSuggestions(rows);
 
-      const currentName = form.getFieldValue('customer_name')?.trim() || '';
+      const currentName = (form.getFieldValue('customer_name') ?? '').trim();
       if (currentName) {
         const matched = rows.find(r => r.name.trim().toLowerCase() === currentName.toLowerCase());
         if (matched) {
@@ -180,7 +195,7 @@ export default function SellMobileModal() {
   };
 
   const handleSearchName = (q: string) => {
-    lastQuery.current = q;
+    setCustomerInput(q);
     if (searchTimer.current) {
       window.clearTimeout(searchTimer.current);
       searchTimer.current = null;
@@ -195,17 +210,23 @@ export default function SellMobileModal() {
     }, 350) as unknown as number;
   };
 
-  const handleSelectName = (_value: string, option: any) => {
+  const handleSelectName = (val: string, option: any) => {
+    // val: "Tên__#123"
+    const [name, idPart] = String(val).split('__#');
+    const id = idPart ? Number(idPart) : undefined;
+
+    setCustomerInput(name);
     setIsExistingCustomer(true);
     form.setFieldsValue({
-      customer_name: option.value,
-      customer_id: option.id ?? null,
-      phone_number: option.phone ?? '',
+      customer_name: name,
+      customer_id: id ?? null,
+      phone_number: option?.phone ?? '',
     });
   };
 
-  const handleChangeName = (val: string) => {
-    const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.trim().toLowerCase());
+  const handleChangeName = (text: string) => {
+    setCustomerInput(text);
+    const matched = suggestions.find(r => r.name.trim().toLowerCase() === text.trim().toLowerCase());
     if (matched) {
       setIsExistingCustomer(true);
       form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
@@ -216,43 +237,44 @@ export default function SellMobileModal() {
   };
 
   const handleBlurName = () => {
-    const val = (form.getFieldValue('customer_name') || '').trim();
+    const val = customerInput.trim();
+    setCustomerInput(val);
     if (!val) {
       setIsExistingCustomer(false);
-      form.setFieldsValue({ customer_id: null, phone_number: '' });
+      form.setFieldsValue({ customer_id: null, phone_number: '' , customer_name: ''});
       return;
     }
     const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.toLowerCase());
     if (matched) {
       setIsExistingCustomer(true);
-      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
+      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '', customer_name: val });
     } else {
       setIsExistingCustomer(false);
-      form.setFieldsValue({ customer_id: null });
+      form.setFieldsValue({ customer_id: null, customer_name: val });
     }
   };
 
   const handleSubmit = async (values: FormValues) => {
     try {
       setLoading(true);
-
+      const debtVal = values.debt_amount ? toNumber(values.debt_amount, 0) : 0;
+      
       const payload: any = {
-        // CHÚ Ý: xác định đúng các id
         mobile_out_id: moId ?? null,
         mobile_in_id: mobileInId ?? null,
 
         customer_id: values.customer_id ?? null,
         customer_name: (values.customer_name || '').trim(),
         phone_number: values.phone_number?.trim() || null,
-        debt: values.debt ? toNumber(values.debt, 0) : 0,
+        debt_amount: debtVal,
         export_price: toNumber(values.export_price, 0),
         expense:      toNumber(values.expense, 0),
         payment:      Number(values.payment),
         export_date:  toYMD(values.export_date),
         warranty:     Number(values.warranty),
         note:         values.note?.trim() || null,
-      };
 
+      };
       if (isEdit && moId) {
         await api.put(`/mobile-out/${moId}`, payload);
       } else {
@@ -262,6 +284,7 @@ export default function SellMobileModal() {
       message.success(isEdit ? 'Cập nhật bán hàng thành công' : 'Bán hàng thành công');
       bump();
       form.resetFields();
+      setCustomerInput('');
       close();
     } catch (e: any) {
       console.error(e);
@@ -271,122 +294,121 @@ export default function SellMobileModal() {
     }
   };
 
-  // Form key theo mobile_out_id để ép remount khi đổi item
   const formKey = isEdit ? `sell-edit-${moId ?? 'new'}` : 'sell-create';
 
   return (
     <Modal
       title={isEdit ? 'Sửa bán' : 'Bán sản phẩm'}
       open={isOpen}
-      onCancel={() => { form.resetFields(); close(); }}
+      onCancel={() => { form.resetFields(); setCustomerInput(''); close(); }}
       footer={null}
-      loading={loading}
-      afterOpenChange={(open) => setOpened(open)}
       destroyOnHidden
+      afterOpenChange={(open) => setOpened(open)}
+      maskClosable={!loading}
     >
-      <Form<FormValues>
-        key={formKey}
-        form={form}
-        layout="horizontal"
-        labelCol={{ span: 6 }}
-        wrapperCol={{ span: 18 }}
-        initialValues={initialValues}
-        onFinish={handleSubmit}
-      >
-        {/* KHÁCH HÀNG */}
-
-        <Form.Item name="mobile_in_id" hidden>
-          <Input />
-        </Form.Item>
-
-        <Form.Item
-          label="Khách hàng"
-          name="customer_name"
-          rules={[{ required: true, message: 'Nhập tên khách hàng' }]}
-          tooltip="Gõ để tìm khách cũ; nếu trùng tên sẽ tự đổ SĐT; nếu không, hãy nhập SĐT mới"
+      <Spin spinning={loading || optionsLoading}>
+        <Form<FormValues>
+          key={formKey}
+          form={form}
+          layout="horizontal"
+          labelCol={{ span: 6 }}
+          wrapperCol={{ span: 18 }}
+          initialValues={initialValues}
+          onFinish={handleSubmit}
         >
-          <AutoComplete
-            placeholder="Nhập tên khách hàng"
-            onSearch={handleSearchName}
-            onSelect={handleSelectName}
-            onChange={handleChangeName}
-            onBlur={handleBlurName}
-            options={suggestions.map(s => ({
-              value: s.name,
-              label: s.name,
-              id: s.id,
-              phone: s.phone,
-            })) as any[]}
-          />
-        </Form.Item>
+          {/* Hidden fields */}
+          <Form.Item name="mobile_in_id" hidden><Input /></Form.Item>
+          <Form.Item name="customer_id" hidden><Input /></Form.Item>
 
-        <Form.Item name="customer_id" hidden><Input /></Form.Item>
+          {/* KHÁCH HÀNG */}
+          <Form.Item
+            label="Khách hàng"
+            name="customer_name"
+            rules={[{ required: true, message: 'Nhập tên khách hàng' }]}
+            tooltip="Gõ để tìm khách cũ; nếu trùng tên sẽ tự đổ SĐT; nếu không, hãy nhập SĐT mới"
+          >
+            <AutoComplete
+              placeholder="Nhập tên khách hàng"
+              value={customerInput}
+              onSearch={handleSearchName}
+              onSelect={handleSelectName}
+              onChange={handleChangeName}
+              onBlur={handleBlurName}
+              options={buildOptions(suggestions)}
+              filterOption={(input, option) =>
+                String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
+              }
+            />
+          </Form.Item>
 
-        <Form.Item
-          label="Số điện thoại"
-          name="phone_number"
-          rules={
-            isExistingCustomer
-              ? []
-              : [
-                  { required: true, message: 'Nhập số điện thoại' },
-                  { pattern: /^[0-9+\s-]{8,15}$/, message: 'Số điện thoại không hợp lệ' },
-                ]
-          }
-        >
-          <Input
-            placeholder={isExistingCustomer ? 'Tự động theo khách đã có' : 'Nhập số điện thoại mới'}
-            disabled={isExistingCustomer}
-          />
-        </Form.Item>
+          <Form.Item
+            label="Số điện thoại"
+            name="phone_number"
+            rules={
+              isExistingCustomer
+                ? []
+                : [
+                    { required: true, message: 'Nhập số điện thoại' },
+                    { pattern: /^[0-9+\s-]{8,15}$/, message: 'Số điện thoại không hợp lệ' },
+                  ]
+            }
+          >
+            <Input
+              placeholder={isExistingCustomer ? 'Tự động theo khách đã có' : 'Nhập số điện thoại mới'}
+              disabled={isExistingCustomer}
+            />
+          </Form.Item>
 
-        <Form.Item label="Ngày bán" name="export_date" rules={[{ required: true, message: 'Vui lòng nhập ngày bán' }]}>
-          <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
-        </Form.Item>
+          <Form.Item label="Ngày bán" name="export_date" rules={[{ required: true, message: 'Vui lòng nhập ngày bán' }]}>
+            <DatePicker format="DD/MM/YYYY" style={{ width: '100%' }} placeholder="Chọn ngày" />
+          </Form.Item>
 
-        <Form.Item label="Giá bán" name="export_price" rules={[{ required: true, message: 'Vui lòng nhập giá bán' }]}>
-          <InputNumber min={0} style={{ width: '100%' }}
-            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={parseNumber}
-          />
-        </Form.Item>
+          <Form.Item label="Giá bán" name="export_price" rules={[{ required: true, message: 'Vui lòng nhập giá bán' }]}>
+            <InputNumber min={0} style={{ width: '100%' }}
+              formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={parseNumber}
+            />
+          </Form.Item>
 
-        <Form.Item label="Chi phí bán" name="expense">
-          <InputNumber min={0} style={{ width: '100%' }}
-            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={parseNumber}
-          />
-        </Form.Item>
+          <Form.Item label="Chi phí bán" name="expense">
+            <InputNumber min={0} style={{ width: '100%' }}
+              formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              parser={parseNumber}
+            />
+          </Form.Item>
 
-        <Form.Item label="Nợ lại" name="debt">
-          <InputNumber min={0} style={{ width: '100%' }}
-            formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-            parser={parseNumber}
-          />
-        </Form.Item>
+          {!isEdit && (
+            <Form.Item label="Nợ lại" name="debt_amount">
+              <InputNumber min={0} style={{ width: '100%' }}
+                formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+                parser={parseNumber}
+              />
+            </Form.Item>
+          )}
 
-        <Form.Item label="Bảo hành" name="warranty">
-          <Select options={optionsWarranty} />
-        </Form.Item>
+          <Form.Item label="Bảo hành" name="warranty">
+            <Select options={optionsWarranty} />
+          </Form.Item>
 
-        <Form.Item label="Thanh toán" name="payment" rules={[{ required: true, message: 'Chọn hình thức thanh toán' }]}>
-          <Radio.Group>
-            <Radio value="2">Tiền mặt</Radio>
-            <Radio value="0">Chuyển khoản</Radio>
-            <Radio value="1">Trả góp</Radio>
-          </Radio.Group>
-        </Form.Item>
+          <Form.Item label="Thanh toán" name="payment" rules={[{ required: true, message: 'Chọn hình thức thanh toán' }]}>
+            <Radio.Group>
+              <Radio value="2">Tiền mặt</Radio>
+              <Radio value="0">Chuyển khoản</Radio>
+              <Radio value="1">Trả góp</Radio>
+            </Radio.Group>
+          </Form.Item>
 
-        <Form.Item label="Ghi chú" name="note">
-          <Input.TextArea rows={3} />
-        </Form.Item>
+          <Form.Item label="Ghi chú" name="note">
+            <Input.TextArea rows={3} />
+          </Form.Item>
 
-        <Form.Item style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
-          <Button type="primary" htmlType="submit">
-            {isEdit ? 'Lưu thay đổi' : 'Bán sản phẩm'}
-          </Button>
-        </Form.Item>
-      </Form>
+          <Form.Item style={{ display: 'flex', justifyContent: 'center', marginTop: 16 }}>
+            <Button type="primary" htmlType="submit" disabled={loading}>
+              {isEdit ? 'Lưu thay đổi' : 'Bán sản phẩm'}
+            </Button>
+          </Form.Item>
+        </Form>
+      </Spin>
     </Modal>
   );
 }

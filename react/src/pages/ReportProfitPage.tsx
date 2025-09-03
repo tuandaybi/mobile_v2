@@ -1,122 +1,125 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import MainLayout from "../components/layout/MainLayout";
-import { Row, Col, Card, Select, Typography } from "antd";
+import { Row, Col, Card, Select, Typography, message, Spin } from "antd";
 import {
   LineChart,
   Line,
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip,
+  Tooltip as RTooltip,
   ResponsiveContainer,
 } from "recharts";
+import api from "../../axiosConfig";
 
 const { Text } = Typography;
 const { Option } = Select;
 
 const COLORS = [
-  "#8884d8",
-  "#82ca9d",
-  "#ffc658",
-  "#ff7300",
-  "#0088FE",
-  "#00C49F",
-  "#FFBB28",
-  "#FF8042",
-  "#a83279",
-  "#3299a8",
-  "#a86e32",
-  "#673ab7",
+  "#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#0088FE", "#00C49F",
+  "#FFBB28", "#FF8042", "#a83279", "#3299a8", "#a86e32", "#673ab7",
 ];
 
-type ProfitData = {
+type DailyAgg = {
   year: number;
-  month: string;
+  month: number;  // API trả number
   day: number;
   revenue: number;
   profit: number;
 };
 
-const mockPhoneData: ProfitData[] = [];
-const mockServiceData: ProfitData[] = [];
-
-for (let m = 1; m <= 12; m++) {
-  for (let d = 1; d <= 28; d++) {
-    const phoneRevenue = Math.floor(150000 + Math.random() * 200000); // 150k-350k
-    const phoneProfit = Math.floor(phoneRevenue * (0.10 + Math.random() * 0.05)); // 10%-15%
-
-    mockPhoneData.push({
-      year: 2025,
-      month: m.toString(),
-      day: d,
-      revenue: phoneRevenue,
-      profit: phoneProfit,
-    });
-
-    const serviceRevenue = Math.floor(80000 + Math.random() * 100000); // 80k-180k
-    const serviceProfit = Math.floor(serviceRevenue * (0.5 + Math.random() * 0.1)); // 50%-60%
-
-    mockServiceData.push({
-      year: 2025,
-      month: m.toString(),
-      day: d,
-      revenue: serviceRevenue,
-      profit: serviceProfit,
-    });
-  }
-}
-
-
+type ProfitDailyResponse = {
+  phone: DailyAgg[];
+  service: DailyAgg[];
+};
 
 const getDaysInMonth = () => Array.from({ length: 31 }, (_, i) => i + 1);
-
 const getYearOptions = () => {
   const currentYear = new Date().getFullYear();
-  return [currentYear - 1, currentYear];
+  return [...Array(currentYear - 2020).keys()].map((y) => y + 2021);
 };
 
 const ProfitReportPage: React.FC = () => {
   const currentYear = new Date().getFullYear();
-  const currentMonth = (new Date().getMonth() + 1).toString();
+  const currentMonth = new Date().getMonth() + 1;
 
   const [years, setYears] = useState<number[]>([currentYear]);
-  const [months, setMonths] = useState<string[]>([currentMonth]);
+  const [months, setMonths] = useState<number[]>([currentMonth]);
 
-  // Filter dữ liệu điện thoại
-  const filteredPhoneData = mockPhoneData.filter(
-    (d) => years.includes(d.year) && months.includes(d.month)
-  );
-  // Filter dữ liệu dịch vụ
-  const filteredServiceData = mockServiceData.filter(
-    (d) => years.includes(d.year) && months.includes(d.month)
-  );
+  const [loading, setLoading] = useState(false);
+  const [phoneData, setPhoneData] = useState<DailyAgg[]>([]);
+  const [serviceData, setServiceData] = useState<DailyAgg[]>([]);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const params = {
+        years: years.join(","),
+        months: months.join(","),
+      };
+      const res = await api.get<ProfitDailyResponse>("/reports/profit-daily", { params });
+      setPhoneData(res.data.phone || []);
+      setServiceData(res.data.service || []);
+    } catch (err: any) {
+      console.error(err);
+      message.error("Không tải được dữ liệu báo cáo");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(years), JSON.stringify(months)]);
 
   const days = getDaysInMonth();
 
-  // Tạo data chart chung cho điện thoại hoặc dịch vụ
-  const createChartData = (data: typeof mockPhoneData) => {
+  // Utility: Build chart data theo ngày và theo nhiều tháng (series m{month})
+  const buildChartData = (src: DailyAgg[], valueKey: "revenue" | "profit" = "revenue") => {
+    // group theo {month -> {day -> sum}}
+    const map = new Map<number, Map<number, number>>();
+    for (const row of src) {
+      if (!years.includes(row.year)) continue; // lọc phòng hờ
+      if (!months.includes(row.month)) continue;
+      if (!map.has(row.month)) map.set(row.month, new Map());
+      const dmap = map.get(row.month)!;
+      dmap.set(row.day, (dmap.get(row.day) || 0) + (row[valueKey] || 0));
+    }
+
     return days.map((day) => {
-      const obj: any = { name: day.toString() };
+      const obj: any = { name: String(day) };
       months.forEach((m) => {
-        const dayData = data.find(
-          (d) => d.month === m && d.day === day && years.includes(d.year)
-        );
-        obj[`m${m}`] = dayData ? dayData.revenue : null;
+        const val = map.get(m)?.get(day) ?? null;
+        obj[`m${m}`] = val;
       });
       return obj;
     });
   };
 
-  const phoneChartData = createChartData(filteredPhoneData);
-  const serviceChartData = createChartData(filteredServiceData);
-
-  const phoneRevenueSum = filteredPhoneData.reduce((sum, d) => sum + d.revenue, 0);
-  const phoneProfitSum = filteredPhoneData.reduce((sum, d) => sum + d.profit, 0);
+  // Tổng hợp số liệu
+  const phoneRevenueSum = useMemo(
+    () => phoneData.reduce((s, r) => s + (r.revenue || 0), 0),
+    [phoneData]
+  );
+  const phoneProfitSum = useMemo(
+    () => phoneData.reduce((s, r) => s + (r.profit || 0), 0),
+    [phoneData]
+  );
   const phoneMargin = phoneRevenueSum ? (phoneProfitSum / phoneRevenueSum) * 100 : 0;
 
-  const serviceRevenueSum = filteredServiceData.reduce((sum, d) => sum + d.revenue, 0);
-  const serviceProfitSum = filteredServiceData.reduce((sum, d) => sum + d.profit, 0);
+  const serviceRevenueSum = useMemo(
+    () => serviceData.reduce((s, r) => s + (r.revenue || 0), 0),
+    [serviceData]
+  );
+  const serviceProfitSum = useMemo(
+    () => serviceData.reduce((s, r) => s + (r.profit || 0), 0),
+    [serviceData]
+  );
   const serviceMargin = serviceRevenueSum ? (serviceProfitSum / serviceRevenueSum) * 100 : 0;
+
+  const phoneChartData = buildChartData(phoneData, "revenue");
+  const serviceChartData = buildChartData(serviceData, "revenue");
 
   return (
     <MainLayout>
@@ -149,10 +152,10 @@ const ProfitReportPage: React.FC = () => {
                   placeholder="Chọn tháng"
                   style={{ width: "100%" }}
                   value={months}
-                  onChange={(vals) => setMonths(vals as string[])}
+                  onChange={(vals) => setMonths(vals as number[])}
                 >
                   {[...Array(12).keys()].map((m) => (
-                    <Option key={m + 1} value={`${m + 1}`}>
+                    <Option key={m + 1} value={m + 1}>
                       Tháng {m + 1}
                     </Option>
                   ))}
@@ -160,87 +163,85 @@ const ProfitReportPage: React.FC = () => {
               </Col>
             </Row>
 
-            {/* Thông tin điện thoại */}
-            <Row style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 16 }}>
-                Tổng tiền đã bán máy:{" "}
-              </Text>
-              <Text style={{ fontSize: 16 }}>{phoneRevenueSum.toLocaleString()} VNĐ</Text>
-            </Row>
-            <Row style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 16 }}>Lợi nhuận: </Text>
-              <Text style={{ fontSize: 16 }}>{phoneProfitSum.toLocaleString()} VNĐ</Text>
-            </Row>
-            <Row style={{ marginBottom: 16 }}>
-              <Text strong style={{ fontSize: 16 }}>Tỉ suất lợi nhuận: </Text>
-              <Text style={{ fontSize: 16 }}>{phoneMargin.toFixed(2)}%</Text>
-            </Row>
+            <Spin spinning={loading}>
+              {/* Điện thoại */}
+              <Row style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 16 }}>Tổng tiền đã bán máy: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{phoneRevenueSum.toLocaleString()} VNĐ</Text>
+              </Row>
+              <Row style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 16 }}>Lợi nhuận: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{phoneProfitSum.toLocaleString()} VNĐ</Text>
+              </Row>
+              <Row style={{ marginBottom: 16 }}>
+                <Text strong style={{ fontSize: 16 }}>Tỉ suất lợi nhuận: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{phoneMargin.toFixed(2)}%</Text>
+              </Row>
 
-            <div style={{ width: "100%", height: 300, marginBottom: 40 }}>
-              <ResponsiveContainer>
-                <LineChart data={phoneChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    label={{ value: "Ngày trong tháng", position: "insideBottomRight", offset: -5 }}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  {months.map((m, idx) => (
-                    <Line
-                      key={m}
-                      type="monotone"
-                      dataKey={`m${m}`}
-                      stroke={COLORS[idx % COLORS.length]}
-                      name={`Tháng ${m}`}
-                      activeDot={{ r: 6 }}
-                      connectNulls={false}
+              <div style={{ width: "100%", height: 300, marginBottom: 40 }}>
+                <ResponsiveContainer>
+                  <LineChart data={phoneChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      label={{ value: "Ngày trong tháng", position: "insideBottomRight", offset: -5 }}
                     />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                    <YAxis />
+                    <RTooltip />
+                    {months.map((m, idx) => (
+                      <Line
+                        key={m}
+                        type="monotone"
+                        dataKey={`m${m}`}
+                        stroke={COLORS[idx % COLORS.length]}
+                        name={`Tháng ${m}`}
+                        activeDot={{ r: 6 }}
+                        connectNulls={true}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
 
-            {/* Thông tin dịch vụ */}
-            <Row style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 16 }}>
-                Tổng tiền dịch vụ:{" "}
-              </Text>
-              <Text style={{ fontSize: 16 }}>{serviceRevenueSum.toLocaleString()} VNĐ</Text>
-            </Row>
-            <Row style={{ marginBottom: 8 }}>
-              <Text strong style={{ fontSize: 16 }}>Lợi nhuận: </Text>
-              <Text style={{ fontSize: 16 }}>{serviceProfitSum.toLocaleString()} VNĐ</Text>
-            </Row>
-            <Row style={{ marginBottom: 16 }}>
-              <Text strong style={{ fontSize: 16 }}>Tỉ suất lợi nhuận: </Text>
-              <Text style={{ fontSize: 16 }}>{serviceMargin.toFixed(2)}%</Text>
-            </Row>
+              {/* Dịch vụ */}
+              <Row style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 16 }}>Tổng tiền dịch vụ: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{serviceRevenueSum.toLocaleString()} VNĐ</Text>
+              </Row>
+              <Row style={{ marginBottom: 8 }}>
+                <Text strong style={{ fontSize: 16 }}>Lợi nhuận: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{serviceProfitSum.toLocaleString()} VNĐ</Text>
+              </Row>
+              <Row style={{ marginBottom: 16 }}>
+                <Text strong style={{ fontSize: 16 }}>Tỉ suất lợi nhuận: </Text>
+                <Text style={{ fontSize: 16, marginLeft: 8 }}>{serviceMargin.toFixed(2)}%</Text>
+              </Row>
 
-            <div style={{ width: "100%", height: 300 }}>
-              <ResponsiveContainer>
-                <LineChart data={serviceChartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    label={{ value: "Ngày trong tháng", position: "insideBottomRight", offset: -5 }}
-                  />
-                  <YAxis />
-                  <Tooltip />
-                  {months.map((m, idx) => (
-                    <Line
-                      key={m}
-                      type="monotone"
-                      dataKey={`m${m}`}
-                      stroke={COLORS[(idx + months.length) % COLORS.length]} // tránh trùng màu điện thoại
-                      name={`Tháng ${m}`}
-                      activeDot={{ r: 6 }}
-                      connectNulls={false}
+              <div style={{ width: "100%", height: 300 }}>
+                <ResponsiveContainer>
+                  <LineChart data={serviceChartData}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis
+                      dataKey="name"
+                      label={{ value: "Ngày trong tháng", position: "insideBottomRight", offset: -5 }}
                     />
-                  ))}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
+                    <YAxis />
+                    <RTooltip />
+                    {months.map((m, idx) => (
+                      <Line
+                        key={m}
+                        type="monotone"
+                        dataKey={`m${m}`}
+                        stroke={COLORS[(idx + months.length) % COLORS.length]}
+                        name={`Tháng ${m}`}
+                        activeDot={{ r: 6 }}
+                        connectNulls={true}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </Spin>
           </Card>
         </Col>
       </Row>

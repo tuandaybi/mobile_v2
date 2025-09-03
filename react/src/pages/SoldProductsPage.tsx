@@ -9,83 +9,62 @@ import { useModalStore } from "../store/modalStore";
 
 type SoldRow = {
   id: number;
-  device_name: string;     // iPhone 16 Plus
-  country_code?: string;   // VN/A, LL/A...
-  storage_gb?: number;     // 128
-  color_name?: string;     // White
-  imei?: string;          // imei
+  device_name: string;
+  country_code?: string;
+  storage_gb?: number;
+  color_name?: string;
+  imei?: string;
   customer_name?: string;
   customer_phone?: string;
-  sale_date?: string;      // ISO (có thể có microseconds)
+  sale_date?: string; // ISO
   price: number;
   note?: string;
   warranty?: number;
-
-  // nếu bạn muốn mở modal sửa bán:
-  raw?: any;               // giữ nguyên để truyền vào sellMobile.open(true, raw)
+  raw?: any;
 };
 
+// ====== utils ======
 const fmtDate = (v: unknown) => {
-  if (v == null) return '—';
-
-  // dayjs instance
+  if (v == null) return "—";
   // @ts-ignore
-  if (dayjs.isDayjs?.(v)) return (v as dayjs.Dayjs).format('DD/MM/YYYY');
-
-  // string (có thể có microseconds ".000000Z")
-  if (typeof v === 'string') {
-    const normalized = v.includes('.') ? v.replace(/\.\d+Z$/, 'Z') : v;
+  if (dayjs.isDayjs?.(v)) return (v as dayjs.Dayjs).format("DD/MM/YYYY");
+  if (typeof v === "string") {
+    const normalized = v.includes(".") ? v.replace(/\.\d+Z$/, "Z") : v;
     const m = dayjs(normalized);
-    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+    return m.isValid() ? m.format("DD/MM/YYYY") : "—";
   }
-
-  // Date object
   if (v instanceof Date) {
     const m = dayjs(v);
-    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+    return m.isValid() ? m.format("DD/MM/YYYY") : "—";
   }
-
-  // timestamp number (ms)
-  if (typeof v === 'number') {
+  if (typeof v === "number") {
     const m = dayjs(new Date(v));
-    return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+    return m.isValid() ? m.format("DD/MM/YYYY") : "—";
   }
-
-  // fallback: thử parse “cưỡng bức”
-  const m = dayjs((v as any)?.toString?.() ?? v as any);
-  return m.isValid() ? m.format('DD/MM/YYYY') : '—';
+  const m = dayjs((v as any)?.toString?.() ?? (v as any));
+  return m.isValid() ? m.format("DD/MM/YYYY") : "—";
 };
 
 const addMonthsEOM = (date: Date, months: number) => {
   const y = date.getFullYear();
   const m = date.getMonth();
   const d = date.getDate();
-
   const targetMonth = m + months;
   const targetYear = y + Math.floor(targetMonth / 12);
   const normMonth = ((targetMonth % 12) + 12) % 12;
-
   const daysInTarget = new Date(targetYear, normMonth + 1, 0).getDate();
   const newDay = Math.min(d, daysInTarget);
   return new Date(targetYear, normMonth, newDay);
 };
 
-const warrantyEndDate = (
-  saleDate?: string | Date | null,
-  months?: number | null
-): Date | null => {
+const warrantyEndDate = (saleDate?: string | Date | null, months?: number | null): Date | null => {
   if (!saleDate || !months) return null;
   const base = typeof saleDate === "string" ? new Date(saleDate) : saleDate;
-  if (Number.isNaN(base.getTime())) return null;
+  if (!(base instanceof Date) || Number.isNaN(base.getTime())) return null;
   return addMonthsEOM(base, Number(months));
 };
 
-const currency = (v: any) => {
-  const n = Number(v ?? 0);
-  return `${n.toLocaleString()} đ`;
-};
-
-
+const currency = (v: any) => `${Number(v ?? 0).toLocaleString()} đ`;
 
 const buildProduct = (r: SoldRow) => {
   const parts = [
@@ -95,43 +74,143 @@ const buildProduct = (r: SoldRow) => {
     r.color_name ? `(${r.color_name})` : undefined,
     r.imei ? `${r.imei}` : undefined,
   ].filter(Boolean);
-  // iPhone 16 Plus - VN/A - 128GB - (White)
   return parts.join(" - ");
 };
 
+// --- paginator parser (chuẩn Laravel Resource + fallback) ---
+function pickLastDefined<T = any>(arr: T[]): T | undefined {
+  for (let i = arr.length - 1; i >= 0; i--) {
+    const v = arr[i];
+    if (v !== null && v !== undefined) return v;
+  }
+  return undefined;
+}
+function parsePagination(payload: any) {
+  const pick = (v: any) => (Array.isArray(v) ? pickLastDefined<any>(v) : v);
+  const asNum = (v: any, fallback = 0) => {
+    const n = Number(pick(v));
+    return Number.isFinite(n) ? n : fallback;
+  };
+  if (payload?.meta) {
+    const m = payload.meta;
+    const perPage = asNum(m.per_page, 0);
+    const current = asNum(m.current_page, 1);
+    const last = asNum(m.last_page, 0);
+    const from = asNum(m.from, 0);
+    const to = asNum(m.to, 0);
+    let total = asNum(m.total, -1);
+    if (total <= 0) {
+      if (current === last && to) total = to;
+      else if (last && perPage) total = last * perPage;
+      else if (to && from) total = to - from + 1;
+      else total = 0;
+    }
+    return { total, perPage, current };
+  }
+  if ((payload?.total ?? payload?.per_page ?? payload?.current_page) !== undefined) {
+    return {
+      total: asNum(payload.total),
+      perPage: asNum(payload.per_page),
+      current: asNum(payload.current_page ?? payload.page, 1),
+    };
+  }
+  return null;
+}
+
+// ================== Component ==================
 const SoldMobilesPage: React.FC = () => {
-  const { sellMobile } = useModalStore();
   const [rows, setRows] = useState<SoldRow[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const fetchList = async (q?: string) => {
+  // server-side paging/sort/search
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(14);
+  const [total, setTotal] = useState(0);
+  const [sortBy, setSortBy] = useState<
+    "id" | "date" | "price" | "warranty" | "device_name" | "imei" | "customer_name" | "phone"
+  >("date");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [searchText, setSearchText] = useState("");
+
+  // FE field -> BE sortBy key
+  const mapFieldToApi = (field?: string): typeof sortBy => {
+    switch (field) {
+      case "device_name":
+      case "imei":
+      case "price":
+      case "warranty":
+        return field as any;
+      case "customer_name":
+        return "customer_name";
+      case "customer_phone":
+        return "phone";
+      case "sale_date":
+        return "date";
+      default:
+        return "date";
+    }
+  };
+
+  const normalize = (x: any): SoldRow => ({
+    id: Number(x.id),
+    device_name: x.device_name ?? x.mobile_in?.device?.name ?? "",
+    country_code: x.country_code ?? x.mobile_in?.country_code ?? x.device?.country_code,
+    storage_gb: Number(x.storage_gb ?? x.mobile_in?.storage?.size_gb ?? x.storage_gb ?? 0),
+    imei: x.imei ?? x.mobile_in?.imei ?? "",
+    color_name: x.color_name ?? x.mobile_in?.color?.vi_name ?? x.color_name,
+    customer_name: x.customer_name ?? x.customer?.name,
+    customer_phone: x.customer_phone ?? x.customer?.phone,
+    sale_date: x.export_date ?? x.sale_date ?? x.date ?? x.created_at,
+    price: Number(x.price ?? x.export_price ?? x.total ?? x.amount ?? 0),
+    note: x.note ?? "",
+    warranty: Number(x.warranty ?? 0),
+    raw: {
+      ...x,
+      mobile_out_id: Number(x.id),
+      mobile_in_id: Number(x.mobile_in_id ?? x.mobile_in?.id ?? 0),
+    },
+  });
+
+  const fetchList = async (
+    keyword = searchText,
+    nextPage = page,
+    nextPerPage = perPage,
+    nextSortBy = sortBy,
+    nextSortDir = sortDir
+  ) => {
     try {
       setLoading(true);
-      const res = await api.get("/mobile-out", { params: { q, limit: 50 } });
-      // Chuẩn hoá dữ liệu từ BE
-      const list: any[] = Array.isArray(res.data?.data) ? res.data.data
-                        : Array.isArray(res.data) ? res.data
-                        : [];
-      const mapped: SoldRow[] = list.map((x: any) => ({
-        id: Number(x.id),
-        device_name: x.device_name ?? x.mobile_in?.device?.name ?? "",
-        country_code: x.country_code ?? x.mobile_in?.country_code ?? x.device?.country_code,
-        storage_gb: Number(x.storage_gb ?? x.mobile_in?.storage?.size_gb ?? x.storage_gb),
-        imei: x.imei ?? x.mobile_in?.imei ?? "",
-        color_name: x.color_name ?? x.mobile_in?.color?.vi_name ?? x.color_name,
-        customer_name: x.customer_name ?? x.customer?.name,
-        customer_phone: x.customer_phone ?? x.customer?.phone,
-        sale_date: x.sale_date ?? x.date ?? x.created_at,
-        price: Number(x.price ?? x.total ?? x.amount ?? 0),
-        note: x.note ?? "",
-        warranty: x.warranty ?? 0,
-        raw: {
-          ...x,
-          mobile_out_id: Number(x.id),
-          mobile_in_id: Number(x.mobile_in_id ?? x.mobile_in?.id ?? 0),
-        },
-      }));
-      setRows(mapped);
+      const params: any = {
+        page: nextPage,
+        perPage: nextPerPage,
+        sortBy: nextSortBy,
+        sortDir: nextSortDir,
+      };
+      const q = (keyword ?? "").trim();
+      if (q) params.q = q;
+
+      const res = await api.get("/mobile-out", { params });
+      const payload = res.data;
+
+      const arr: any[] = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.result)
+        ? payload.result
+        : [];
+      setRows(arr.map(normalize));
+
+      const p = parsePagination(payload);
+      if (p) {
+        setTotal(p.total);
+        setPerPage(p.perPage || nextPerPage);
+        setPage(p.current || nextPage);
+      } else {
+        setTotal(arr.length);
+        setPerPage(nextPerPage);
+        setPage(1);
+      }
     } catch (e: any) {
       console.error(e);
       message.error(e?.response?.data?.message ?? "Lỗi tải danh sách máy đã bán");
@@ -142,20 +221,22 @@ const SoldMobilesPage: React.FC = () => {
 
   useEffect(() => {
     fetchList();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = (value: string) => {
-    fetchList(value);
+    setSearchText(value);
+    setPage(1);
+    fetchList(value, 1, perPage, sortBy, sortDir);
   };
 
   const handleEdit = (record: SoldRow) => {
-    // mở modal "sửa bán" của bạn (đã có trong modalStore)
     const payload = {
-    ...(record.raw ?? {}),
-    mobile_out_id: record.raw?.mobile_out_id ?? record.id,
-    mobile_in_id: record.raw?.mobile_in_id ?? 0,
-  };
-    sellMobile.open(true, payload);
+      ...(record.raw ?? {}),
+      mobile_out_id: record.raw?.mobile_out_id ?? record.id,
+      mobile_in_id: record.raw?.mobile_in_id ?? 0,
+    };
+    useModalStore.getState().sellMobile.open(true, payload);
   };
 
   const handleDelete = async (record: SoldRow) => {
@@ -169,7 +250,7 @@ const SoldMobilesPage: React.FC = () => {
         try {
           await api.delete(`/mobile-out/${record.id}`);
           message.success("Đã xóa đơn bán & công nợ liên quan");
-          await fetchList();
+          await fetchList(searchText, page, perPage, sortBy, sortDir);
         } catch (e: any) {
           console.error(e);
           message.error(e?.response?.data?.message ?? "Xóa thất bại");
@@ -178,34 +259,76 @@ const SoldMobilesPage: React.FC = () => {
     });
   };
 
-  const columns: ColumnsType<SoldRow> = useMemo(() => [
-    { title: "Tên SP", dataIndex: "device_name", key: "device_name", render: (_, r) => buildProduct(r) },
-    { title: "Tên Khách Hàng", dataIndex: "customer_name", key: "customer_name" },
-    { title: "SĐT Khách hàng", dataIndex: "customer_phone", key: "customer_phone" },
-    { title: "Ngày Bán", dataIndex: "sale_date", key: "sale_date", render: (d) => fmtDate(d) },
-    { 
-      title: "Bảo hành", 
-      dataIndex: "warranty", 
-      key: "warranty",
-      render: (m: number | null, row: any) => {
-        if (!m) return "—";
-        const end = warrantyEndDate(row.sale_date, m);
-        return end ? fmtDate(end) : "—";
-      }
-    },
-    { title: "Giá Bán", dataIndex: "price", key: "price", render: (p) => currency(p) },
-    { title: "Ghi chú", dataIndex: "note", key: "note" },
-    {
-      title: "Chức năng",
-      key: "action",
-      render: (_, record) => (
-        <Space.Compact>
-          <Button size="small" onClick={() => handleEdit(record)}>Sửa</Button>
-          <Button danger size="small" onClick={() => handleDelete(record)}>Xóa</Button>
-        </Space.Compact>
-      ),
-    },
-  ], []);
+  const columns: ColumnsType<SoldRow> = useMemo(
+    () => [
+      {
+        title: "Tên SP",
+        dataIndex: "device_name",
+        key: "device_name",
+        render: (_, r) => buildProduct(r),
+        sorter: true,
+        sortOrder: sortBy === "device_name" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "Tên Khách Hàng",
+        dataIndex: "customer_name",
+        key: "customer_name",
+        sorter: true,
+        sortOrder: sortBy === "customer_name" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "SĐT Khách hàng",
+        dataIndex: "customer_phone",
+        key: "customer_phone",
+        sorter: true,
+        sortOrder: sortBy === "phone" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "Ngày Bán",
+        dataIndex: "sale_date",
+        key: "sale_date",
+        render: (d) => fmtDate(d),
+        sorter: true,
+        sortOrder: sortBy === "date" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "Bảo hành",
+        dataIndex: "warranty",
+        key: "warranty",
+        render: (m: number | null, row: SoldRow) => {
+          if (!m) return "—";
+          const end = warrantyEndDate(row.sale_date, m);
+          return end ? fmtDate(end) : "—";
+        },
+        sorter: true,
+        sortOrder: sortBy === "warranty" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "Giá Bán",
+        dataIndex: "price",
+        key: "price",
+        render: (p) => currency(p),
+        sorter: true,
+        sortOrder: sortBy === "price" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      { title: "Ghi chú", dataIndex: "note", key: "note" },
+      {
+        title: "Chức năng",
+        key: "action",
+        render: (_, record) => (
+          <Space.Compact>
+            <Button size="small" onClick={() => handleEdit(record)}>
+              Sửa
+            </Button>
+            <Button danger size="small" onClick={() => handleDelete(record)}>
+              Xóa
+            </Button>
+          </Space.Compact>
+        ),
+      },
+    ],
+    [sortBy, sortDir]
+  );
 
   return (
     <MainLayout>
@@ -216,10 +339,35 @@ const SoldMobilesPage: React.FC = () => {
             data={rows}
             loading={loading}
             columns={columns}
-            pageSize={14}
             rowKey="id"
             onSearch={handleSearch}
             scrollX="max-content"
+            pagination={{
+              current: page,
+              pageSize: perPage,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 14, 20, 30, 50, 100],
+            }}
+            onTableChange={(pagination, _filters, sorter) => {
+              const nextPage = pagination.current || 1;
+              const nextPerPage = pagination.pageSize || perPage;
+
+              let nextSortBy = sortBy;
+              let nextSortDir: "asc" | "desc" = sortDir;
+
+              const s: any = Array.isArray(sorter) ? sorter[0] : sorter;
+              if (s && s.field) {
+                nextSortBy = mapFieldToApi(s.field);
+                nextSortDir = s.order === "ascend" ? "asc" : "desc";
+              }
+
+              setPage(nextPage);
+              setPerPage(nextPerPage);
+              setSortBy(nextSortBy);
+              setSortDir(nextSortDir);
+              fetchList(searchText, nextPage, nextPerPage, nextSortBy, nextSortDir);
+            }}
           />
         </Col>
       </Row>

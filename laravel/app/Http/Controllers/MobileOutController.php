@@ -18,53 +18,72 @@ class MobileOutController extends Controller
 
     public function index(Request $r)
     {
-        $q     = trim((string) $r->input('q', ''));
-        $limit = max(1, (int) $r->input('limit', 50));
         $storeId = $this->resolveStoreId($r);
 
-        $rows = MobileOut::query()
-            ->with(['mobileIn.device', 'mobileIn.color', 'mobileIn.storage', 'customer'])
-            // lọc theo store_id trong bảng mobile_in
-            ->whereHas('mobileIn', fn($qq) => $qq->where('store_id', $storeId))
-            ->when($q !== '', function ($query) use ($q) {
-                $like = "%{$q}%";
-                $query->where(function ($w) use ($like) {
-                    $w->whereHas('mobileIn.device', fn($qq) => $qq->where('name', 'like', $like))
-                    ->orWhereHas('customer', fn($qq) => $qq->where('name', 'like', $like)
-                                                            ->orWhere('phone', 'like', $like))
-                    ->orWhere('code', 'like', $like)
-                    ->orWhere('note', 'like', $like);
-                });
-            })
-            ->orderByDesc('id')
-            ->limit($limit)
-            ->get();
+        // perPage: ưu tiên perPage, fallback limit (tương thích code cũ)
+        $perPage = (int) $r->input('perPage', $r->input('limit', 14));
+        $perPage = max(1, min($perPage, 200));
 
-        // Chuẩn hoá trả về theo FE
-        $data = $rows->map(function (MobileOut $m) {
-            $mi = $m->mobileIn;
-            $price = (int) ($m->export_price ?? $m->total ?? $m->amount ?? 0);
-            $warranty = (int) ($m->warranty ?? 0);
-            return [
-                'id'             => (int) $m->id,
-                'device_name'    => optional($mi?->device)->name ?? '',
-                'country_code'   => $mi->country_code ?? optional($mi?->device)->country_code,
-                'storage_gb'     => (int) ($mi?->storage?->size_gb ?? 0),
-                'color_name'     => $mi?->color?->vi_name ?? $mi?->color?->name,
-                'imei'           => $mi->imei ?? $mi->imei ?? '',
-                'customer_name'  => optional($m->customer)->name,
-                'customer_phone' => optional($m->customer)->phone,
-                'sale_date'      => $m->sale_date ?? $m->created_at,
-                'price'          => $price,
-                'note'           => $m->note,
-                'warranty'      => $warranty,
-                // optional raw nếu muốn FE dùng lại:
-                // 'mobile_in_id' => $m->mobile_in_id,
-                // 'code'         => $m->code,
-            ];
-        });
+        $q = trim((string) $r->input('q', ''));
 
-        return response()->json($data);
+        // JOIN để search/sort theo thực thể liên quan
+        $builder = MobileOut::query()
+            ->with([
+                'mobileIn.device:id,name',
+                'mobileIn.color:id,vi_name,en_name',
+                'mobileIn.storage:id,name,size_gb',
+                'customer:id,name,phone',
+            ])
+            ->leftJoin('mobile_in as mi', 'mi.id', '=', 'mobile_out.mobile_in_id')
+            ->leftJoin('customers as c', 'c.id', '=', 'mobile_out.customer_id')
+            ->leftJoin('devices as d', 'd.id', '=', 'mi.device_id')
+            ->leftJoin('colors as co', 'co.id', '=', 'mi.color_id')
+            ->leftJoin('storages as st', 'st.id', '=', 'mi.storage_id')
+            ->where('mi.store_id', $storeId)
+            ->select('mobile_out.*');
+
+        // Search
+        if ($q !== '') {
+            $like = "%{$q}%";
+            $builder->where(function ($w) use ($like) {
+                $w->orWhere('mobile_out.note', 'like', $like)
+                ->orWhere('mi.imei', 'like', $like)
+                ->orWhere('mi.country_code', 'like', $like)
+                ->orWhere('d.name', 'like', $like)
+                ->orWhere('co.vi_name', 'like', $like)
+                ->orWhere('st.name', 'like', $like)
+                ->orWhere('c.name', 'like', $like)
+                ->orWhere('c.phone', 'like', $like);
+            });
+        }
+
+        // Filter ngày bán (export_date)
+        if ($f = $r->input('date_from')) {
+            $builder->whereDate('mobile_out.export_date', '>=', $f);
+        }
+        if ($t = $r->input('date_to')) {
+            $builder->whereDate('mobile_out.export_date', '<=', $t);
+        }
+
+        // Sort whitelist FE -> DB column
+        $sortMap = [
+            'id'            => 'mobile_out.id',
+            'date'          => 'mobile_out.export_date',
+            'price'         => 'mobile_out.export_price',
+            'warranty'      => 'mobile_out.warranty',
+            'device_name'   => 'd.name',
+            'imei'          => 'mi.imei',
+            'customer_name' => 'c.name',
+            'phone'         => 'c.phone',
+        ];
+        $sortBy  = (string) $r->input('sortBy', 'id');
+        $sortDir = strtolower((string) $r->input('sortDir', 'desc')) === 'asc' ? 'asc' : 'desc';
+        $builder->orderBy($sortMap[$sortBy] ?? 'mobile_out.id', $sortDir);
+
+        // Paginate CHUẨN (đừng override meta)
+        $paginator = $builder->paginate($perPage)->appends($r->query());
+
+        return MobileOutResource::collection($paginator);
     }
 
     public function store(MobileOutStoreRequest $r)
@@ -128,7 +147,7 @@ class MobileOutController extends Controller
 
             // 3) Nếu có nợ => tạo bản ghi Debt
             $createdDebt = null;
-            $debtToAdd = (float)($data['debt'] ?? 0);
+            $debtToAdd = (float)($data['debt_amount'] ?? 0);
             if ($debtToAdd > 0 && !empty($data['customer_id'])) {
                 $saleDate = !empty($data['sold_at'])
                     ? Carbon::parse($data['sold_at'])->toDateString()

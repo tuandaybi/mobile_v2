@@ -20,6 +20,14 @@ export type DebtRecord = {
   total: number;
 };
 
+export type PaymentItem = {
+  id: number;
+  amount: number | string;
+  note?: string | null;
+  created_at: string;         // ISO
+  user_name?: string | null;  // người tạo phiếu
+};
+
 export type OpenDebt = {
   id: number;
   note?: string | null;
@@ -30,6 +38,9 @@ export type OpenDebt = {
   origin_type?: OriginType;
   origin_id?: number | null;
   origin_label?: string;
+
+  /** 🔥 Thêm: danh sách lần trả cho khoản nợ này */
+  payments?: PaymentItem[];
 };
 
 type Props = {
@@ -38,7 +49,7 @@ type Props = {
   customer: DebtRecord | null;
 
   loading: boolean;       // loading danh sách khoản nợ đang mở
-  debts: OpenDebt[];      // danh sách khoản nợ đang mở của khách
+  debts: OpenDebt[];      // danh sách khoản nợ đang mở của khách (đã kèm payments)
 
   onRefresh?: () => void; // gọi lại API chi tiết
   onSettleAll?: (customer: DebtRecord) => void;
@@ -149,6 +160,9 @@ const DebtDetailDrawer: React.FC<Props> = ({
             d.origin_type === 'mobile' ? 'green' :
             d.origin_type === 'service' ? 'purple' : 'default';
 
+          const payments = d.payments ?? [];
+          const totalPaidFromItems = payments.reduce((s, p) => s + toNum(p.amount), 0);
+
           return (
             <List.Item style={{ padding: 0, marginBottom: 12, border: "none" }}>
               <Card
@@ -192,15 +206,60 @@ const DebtDetailDrawer: React.FC<Props> = ({
                       <Tag color="red">Còn lại: <b>{currency(d.remaining)}</b></Tag>
                     </div>
                   </Col>
+
                   <Col xs={24}>
                     <div style={{ marginTop: 6 }}>
                       <Text type="secondary">Tiến độ thanh toán</Text>
                       <Progress percent={pct} />
                     </div>
                   </Col>
+
+                  {/* 🔥 Chi tiết các lần trả */}
+                  <Col xs={24}>
+                    <Divider style={{ margin: "8px 0" }} />
+                    <Space align="baseline" style={{ width: "100%", justifyContent: "space-between" }}>
+                      <Text strong>Chi tiết đã trả</Text>
+                      <Text type="secondary">
+                        Tổng theo chi tiết: <b>{currency(totalPaidFromItems)}</b>
+                      </Text>
+                    </Space>
+
+                    {payments.length === 0 ? (
+                      <Empty style={{ marginTop: 8 }} description="Chưa có lần trả nào" />
+                    ) : (
+                      <List
+                        size="small"
+                        dataSource={payments}
+                        renderItem={(p) => (
+                          <List.Item key={p.id} style={{ paddingLeft: 0, paddingRight: 0 }}>
+                            <div style={{ width: "100%" }}>
+                              <Space style={{ width: "100%", justifyContent: "space-between" }} wrap>
+                                <Space>
+                                  <Tag color="blue">Trả</Tag>
+                                  <Text>{currency(p.amount)}</Text>
+                                </Space>
+                                <Space split={<Divider type="vertical" />}>
+                                  <Text type="secondary">{fmtDate(p.created_at)}</Text>
+                                  {p.user_name && <Text type="secondary">bởi {p.user_name}</Text>}
+                                </Space>
+                              </Space>
+                              {p.note && (
+                                <div style={{ marginTop: 4 }}>
+                                  <Text type="secondary">Ghi chú: </Text>
+                                  <Text>{p.note}</Text>
+                                </div>
+                              )}
+                            </div>
+                          </List.Item>
+                        )}
+                      />
+                    )}
+                  </Col>
+
                   {d?.note ? (
                     <Col xs={24}>
-                      <Text type="secondary">Ghi chú:</Text>
+                      <Divider style={{ margin: "8px 0" }} />
+                      <Text type="secondary">Ghi chú khoản nợ:</Text>
                       <div>{d.note}</div>
                     </Col>
                   ) : null}

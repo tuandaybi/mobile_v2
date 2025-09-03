@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Concerns;
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 
 trait ResolvesStore
 {
@@ -47,5 +48,16 @@ trait ResolvesStore
         }
 
         return $storeIds[0];
+    }
+
+    private function resolveStoreIdByUserId(int $userId): ?int
+    {
+        if (\Schema::hasColumn('user_in_store', 'user_id') && \Schema::hasColumn('user_in_store', 'store_id')) {
+            return \DB::table('user_in_store')
+                ->where('user_id', $userId)
+                ->orderByDesc('created_at')
+                ->value('store_id');
+        }
+        return null;
     }
 }

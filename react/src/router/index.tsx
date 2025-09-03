@@ -14,6 +14,7 @@ const SoldProductsPage = lazy(() => import('@/pages/SoldProductsPage'));
 const CheckImeiPage = lazy(() => import('@/pages/CheckImeiPage'));
 const ReportProfitPage = lazy(() => import('@/pages/ReportProfitPage'));
 const ReportQuantityPage = lazy(() => import('@/pages/ReportQuantityPage'));
+const ReportDebtPage = lazy(() => import('@/pages/ReportDebtPage'));
 
 // Admin pages
 const AdminUsers = lazy(() => import('@/pages/admin/users'));
@@ -35,11 +36,12 @@ const Router: React.FC = () => {
           <Route path="/home" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/mobiles" element={<ProtectedRoute><Mobiles /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
-          <Route path="/debt" element={<ProtectedRoute><Debt /></ProtectedRoute>} />
+          <Route path="/debts" element={<ProtectedRoute><Debt /></ProtectedRoute>} />
           <Route path="/sold-products" element={<ProtectedRoute><SoldProductsPage /></ProtectedRoute>} />
           <Route path="/check-imei" element={<ProtectedRoute><CheckImeiPage /></ProtectedRoute>} />
           <Route path="/report-profit" element={<ProtectedRoute><ReportProfitPage /></ProtectedRoute>} />
           <Route path="/report-quantity" element={<ProtectedRoute><ReportQuantityPage /></ProtectedRoute>} />
+          <Route path="/report-debt" element={<ProtectedRoute><ReportDebtPage /></ProtectedRoute>} />
           <Route path="/admin/users" element={<ProtectedRoute><AdminUsers /></ProtectedRoute>} />
           <Route path="/admin/customers" element={<ProtectedRoute><AdminCustomers /></ProtectedRoute>} />
           <Route path="/admin/stores" element={<ProtectedRoute><AdminStores /></ProtectedRoute>} />

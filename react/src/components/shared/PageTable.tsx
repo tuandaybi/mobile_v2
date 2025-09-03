@@ -9,28 +9,31 @@ type PageTableProps<T extends { id?: string | number }> = {
   columns: ColumnsType<T>;
   rowKey?: string | ((record: T) => string);
   pageSize?: number;
+
   /** Server search */
   onSearch?: (value: string) => void;
   searchPlaceholder?: string;
   extra?: ReactNode;
   scrollX?: number | string;
+
   /** spinner của Table */
   loading?: boolean | SpinProps;
   /** skeleton cho Card */
   cardLoading?: boolean;
 
-  /** --- Server pagination --- */
+  /** --- Legacy server pagination fields (optional) --- */
   current?: number;
   total?: number;
   showSizeChanger?: boolean;
   pageSizeOptions?: Array<number | string>;
   onPageChange?: (page: number, pageSize: number) => void;
 
-  /** --- Table onChange để bắt sort/filter --- */
+  /** Hiển thị tổng ở pagination */
+  showTotal?: boolean | ((total: number, range: [number, number]) => ReactNode);
+
+  /** --- NEW: pass-through (controlled) --- */
+  pagination?: TablePaginationConfig | false;
   onTableChange?: TableProps<T>["onChange"];
-  showTotal?:
-    | boolean
-    | ((total: number, range: [number, number]) => ReactNode);
 };
 
 export default function PageTable<T extends { id?: string | number }>(
@@ -42,33 +45,41 @@ export default function PageTable<T extends { id?: string | number }>(
     columns,
     rowKey = "id",
     pageSize = 14,
+
     onSearch,
     searchPlaceholder = "Tìm kiếm ...",
     extra,
     scrollX = "max-content",
+
     loading = false,
     cardLoading = false,
 
-    // server pagination
+    // legacy pagination (Mode B)
     current,
     total,
     showSizeChanger = true,
     pageSizeOptions = [10, 15, 20, 50, 100],
     onPageChange,
 
-    onTableChange,
     showTotal = true,
+
+    // pass-through (Mode A)
+    pagination: paginationProp,
+    onTableChange,
   } = props;
 
-  const isSpinning = typeof loading === "boolean" ? loading : !!loading?.spinning;
+  const isSpinning =
+    typeof loading === "boolean" ? loading : !!(loading as SpinProps)?.spinning;
 
-  const pagination: TablePaginationConfig = {
+  // Mode B: tự build pagination khi KHÔNG truyền props.pagination
+  const builtPagination: TablePaginationConfig = {
     current,
     pageSize,
     total,
     showSizeChanger,
     pageSizeOptions: pageSizeOptions.map(String),
-    onChange: onPageChange,
+    // Tránh double fetch: chỉ dùng onPageChange nếu KHÔNG có onTableChange
+    onChange: !onTableChange ? onPageChange : undefined,
     showTotal:
       showTotal === true
         ? (t, r) => `${r[0]}-${r[1]} / ${t}`
@@ -76,6 +87,13 @@ export default function PageTable<T extends { id?: string | number }>(
         ? showTotal
         : undefined,
   };
+
+  // Quy tắc chọn pagination:
+  // - props.pagination === false  -> tắt phân trang
+  // - props.pagination là object -> pass-through
+  // - undefined                  -> dùng builtPagination (legacy)
+  const finalPagination: TablePaginationConfig | false =
+    typeof paginationProp !== "undefined" ? paginationProp : builtPagination;
 
   return (
     <Card title={title} extra={extra} loading={cardLoading}>
@@ -94,12 +112,12 @@ export default function PageTable<T extends { id?: string | number }>(
       <Table<T>
         dataSource={data}
         columns={columns}
-        rowKey={rowKey}
+        rowKey={rowKey as any}
         bordered
         rowClassName={() => "hoverable-row"}
         scroll={{ x: scrollX }}
         loading={loading}
-        pagination={pagination}
+        pagination={finalPagination}
         onChange={onTableChange}
       />
     </Card>

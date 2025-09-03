@@ -71,6 +71,7 @@ export default function DevicePage(): JSX.Element {
 
   const handleSave = async () => {
     try {
+      setLoading(true);
       const values = await form.validateFields();
       if (editingDevice) {
         // Cập nhật thiết bị
@@ -87,6 +88,8 @@ export default function DevicePage(): JSX.Element {
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || 'Lỗi khi lưu thiết bị';
       message.error(errorMessage);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -158,6 +161,7 @@ export default function DevicePage(): JSX.Element {
           onCancel={() => setIsModalOpen(false)}
           okText="Lưu"
           cancelText="Hủy"
+          loading={loading}
           afterOpenChange={(open) => {
             if (open) {
               if (editingDevice) {

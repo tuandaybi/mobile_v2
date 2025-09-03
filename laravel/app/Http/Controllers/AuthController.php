@@ -13,9 +13,13 @@ use App\Http\Resources\AuthUserResource;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
+use App\Http\Controllers\Concerns\ResolvesStore;
 
 class AuthController extends Controller
 {
+    use ResolvesStore;
+
     public function index(Request $request){
         // Trả về thông tin người dùng đã đăng nhập
         $user = $request->user(); // yêu cầu route có auth:sanctum
@@ -42,8 +46,8 @@ class AuthController extends Controller
             return response()->json(['message'=>'Server chưa cấu hình renew_secret'], 500);
         }
 
-        $user = \App\Models\User::where('email', $validated['email'])->first();
-        if (!$user || !\Illuminate\Support\Facades\Hash::check($validated['password'], $user->password)) {
+        $user = User::where('email', $validated['email'])->first();
+        if (!$user || !Hash::check($validated['password'], $user->password)) {
             return response()->json(['message'=>'Email hoặc mật khẩu không đúng'], 401);
         }
         if (!$user->is_active) {
@@ -81,14 +85,23 @@ class AuthController extends Controller
         // Lưu/đính kèm thông tin hạn cho frontend (Sanctum không tự set expiry)
         $licenseExpiresAt = $user->license_expires_at ?? $parsed['expires'];
 
+        $storeId = $this->resolveStoreIdByUserId($user->id);
+        $store = DB::table('stores')->select('id','name')->where('id', $storeId)->first();
+        $store_name = $store->name ?? null;
+
+        $userPayload = (new AuthUserResource($user))
+        ->withToken($plainToken)
+        ->withStoreName($store_name)
+        ->toArray($request);
+
         return response()->json([
             'message'   => 'Đăng nhập thành công',
-            'user'      => (new \App\Http\Resources\AuthUserResource($user))->withToken($plainToken),
+            'user'      => $userPayload,
             'license'   => [
                 'email'   => $parsed['email'],
-                'expires' => $licenseExpiresAt instanceof \Carbon\CarbonInterface
+                'expires' => $licenseExpiresAt instanceof Carbon\CarbonInterface
                     ? $licenseExpiresAt->toIso8601String()
-                    : \Carbon\Carbon::parse($licenseExpiresAt)->toIso8601String(),
+                    : Carbon::parse($licenseExpiresAt)->toIso8601String(),
             ],
         ]);
     }

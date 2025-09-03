@@ -14,7 +14,7 @@ class MobileOut extends Model
 
     protected $fillable = [
         'mobile_in_id','user_id','customer_id',
-        'export_date','export_price','expense','warranty','payment','note'
+        'export_date','export_price','expense','warranty','payment','debt_amount','note'
     ];
 
     protected $casts = [

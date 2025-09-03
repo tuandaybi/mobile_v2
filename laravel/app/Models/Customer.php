@@ -32,6 +32,30 @@ class Customer extends Model
         return $this->hasMany(Service::class);
     }
 
+    public function debts() {
+        return $this->hasMany(Debt::class, 'customer_id');
+    }
+
+    public function debtsMobileOut() {
+        return $this->hasMany(Debt::class, 'customer_id')
+                    ->whereNotNull('mobileout_id');
+    }
+
+    public function debtsService() {
+        return $this->hasMany(Debt::class, 'customer_id')
+                    ->whereNotNull('service_id');
+    }
+
+    public function paidsMobileOut() {
+        return $this->hasMany(Debt::class, 'customer_id')
+                    ->whereNotNull('mobileout_id');
+    }
+
+    public function paidsService() {
+        return $this->hasMany(Debt::class, 'customer_id')
+                    ->whereNotNull('service_id');
+    }
+
     /** Nếu nhận máy cũ (trade-in) */
     // public function tradeInMobileIns(): HasMany
     // {

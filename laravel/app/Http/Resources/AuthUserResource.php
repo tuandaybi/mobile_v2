@@ -6,10 +6,17 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class AuthUserResource extends JsonResource
 {
     protected ?string $authToken = null;
+    protected ?string $storeName = null;
 
     public function withToken(?string $token): self
     {
         $this->authToken = $token;
+        return $this;
+    }
+
+    public function withStoreName(?string $name): self
+    {
+        $this->storeName = $name;
         return $this;
     }
 
@@ -27,6 +34,7 @@ class AuthUserResource extends JsonResource
                 : [],
             // ➜ luôn có field, kể cả null (đỡ undefined ở FE)
             'auth_token'         => $this->authToken,
+            'store_name'         => $this->storeName,
         ];
     }
 }

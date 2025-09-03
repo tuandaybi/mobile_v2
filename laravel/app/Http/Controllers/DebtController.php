@@ -91,63 +91,99 @@ class DebtController extends Controller
     public function summary(Request $r)
     {
         $storeId = $this->resolveStoreId($r);
-        $q = trim((string) $r->input('q'));
+        $s       = trim((string) $r->input('q', ''));
 
-        $principal = $this->debtPrincipalColumn(); // ví dụ "debt"
+        $principal = $this->debtPrincipalColumn(); // vd: "debt"
 
+        // Mỗi khoản nợ: principal, paid, remaining
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
-            ->selectRaw(
-                "d.id, d.customer_id, d.`$principal` as principal,
-                COALESCE(SUM(p.amount),0) as paid,
-                (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining"
-            )
+            ->selectRaw("
+                d.id,
+                d.customer_id,
+                d.`$principal` AS principal,
+                COALESCE(SUM(p.amount), 0) AS paid,
+                (d.`$principal` - COALESCE(SUM(p.amount), 0)) AS remaining
+            ")
             ->groupBy('d.id', 'd.customer_id', "d.$principal");
 
+        // Chỉ lấy nợ còn lại > 0
         $openDebts = DB::query()
             ->fromSub($perDebt, 'x')
             ->where('x.remaining', '>', 0);
 
-        $rows = DB::query()
+        // Tổng hợp theo khách
+        $base = DB::query()
             ->fromSub($openDebts, 'y')
             ->join('customers as c', 'c.id', '=', 'y.customer_id')
             ->where('c.store_id', $storeId)
-            ->when($q !== '', function ($qq) use ($q) {
-                $like = "%{$q}%";
+            ->when($s !== '', function ($qq) use ($s) {
+                $like = "%{$s}%";
                 $qq->where(function ($w) use ($like) {
                     $w->where('c.name', 'like', $like)
                     ->orWhere('c.phone', 'like', $like);
                 });
             })
             ->selectRaw('
-                c.id as customer_id,
-                c.name as customer_name,
-                c.phone as phone,
-                COUNT(*) as number_debt,
-                SUM(y.principal) as debt_total,
-                SUM(y.paid) as payment_total,
-                SUM(y.remaining) as total
+                c.id   AS customer_id,
+                c.name AS customer_name,
+                c.phone AS phone,
+                COUNT(*)              AS number_debt,
+                SUM(y.principal)      AS debt_total,
+                SUM(y.paid)           AS payment_total,
+                SUM(y.remaining)      AS total
             ')
-            ->groupBy('c.id', 'c.name', 'c.phone')
-            ->orderByDesc('total')
-            ->get();
+            ->groupBy('c.id', 'c.name', 'c.phone');
 
-        return response()->json($rows);
+        // ---- sort được phép ----
+        $sortable = ['customer_name','phone','number_debt','debt_total','payment_total','total'];
+        $sortBy   = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'total';
+        $sortDir  = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
+
+        // Dùng biểu thức trực tiếp để tránh tùy DB không cho order alias
+        switch ($sortBy) {
+            case 'customer_name':
+                $base->orderBy('c.name', $sortDir);
+                break;
+            case 'phone':
+                $base->orderBy('c.phone', $sortDir);
+                break;
+            case 'number_debt':
+                $base->orderByRaw("COUNT(*) {$sortDir}");
+                break;
+            case 'debt_total':
+                $base->orderByRaw("SUM(y.principal) {$sortDir}");
+                break;
+            case 'payment_total':
+                $base->orderByRaw("SUM(y.paid) {$sortDir}");
+                break;
+            case 'total':
+            default:
+                $base->orderByRaw("SUM(y.remaining) {$sortDir}");
+                break;
+        }
+
+        // ---- paginate chuẩn ----
+        $perPage = max(1, min((int)$r->input('perPage', 14), 200));
+        $p = $base->paginate($perPage)->appends($r->query());
+
+        // Trả về đúng JSON paginator của Laravel (data/links/meta)
+        return response()->json($p);
     }
 
     public function openDebtsByCustomer(Request $r, int $customer)
     {
         $storeId   = $this->resolveStoreId($r);
-        $principal = $this->debtPrincipalColumn();
+        $principal = 'debt'; // cột gốc nợ của bạn
 
+        // ✅ Kiểm tra customer thuộc store
         $valid = DB::table('customers')
             ->where('id', $customer)
             ->where('store_id', $storeId)
             ->exists();
-        if (!$valid) return response()->json(['message' => 'Khách không thuộc cửa hàng'], 403);
-
-        $originSelects = $this->originCaseSelect(); // 3 selectRaw strings
-        $originSql     = implode(", ", $originSelects);
+        if (!$valid) {
+            return response()->json(['message' => 'Khách không thuộc cửa hàng'], 403);
+        }
 
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
@@ -158,20 +194,78 @@ class DebtController extends Controller
                 d.`$principal` as amount,
                 COALESCE(SUM(p.amount),0) as paid,
                 (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining,
-                $originSql"
+                CASE 
+                WHEN d.mobileout_id IS NOT NULL THEN 'mobile'
+                WHEN d.service_id   IS NOT NULL THEN 'service'
+                ELSE 'unknown'
+                END as origin_type,
+                COALESCE(d.mobileout_id, d.service_id, NULL) as origin_id,
+                CASE 
+                WHEN d.mobileout_id IS NOT NULL THEN CONCAT('Bán máy - #', d.mobileout_id)
+                WHEN d.service_id   IS NOT NULL THEN CONCAT('Dịch vụ - #', d.service_id)
+                ELSE '—'
+                END as origin_label"
             )
             ->where('d.customer_id', $customer)
-            ->groupBy('d.id', 'd.note', 'd.created_at', "d.$principal"
-                // group by các cột origin nếu DB cần (MySQL thường không bắt buộc với function CASE/COALESCE constant),
-                // nhưng để chắc chắn, thêm:
-                // , DB::raw(str_replace(' as ', ', ', $originSql)) // <- không khuyến nghị vì phức tạp
-            )
+            ->groupBy('d.id', 'd.note', 'd.created_at', "d.$principal")
             ->having('remaining', '>', 0)
             ->orderBy('d.created_at', 'asc')
             ->get();
 
-        return response()->json($perDebt);
+        $debts = $perDebt->map(fn($row) => [
+            'id'           => (int) $row->id,
+            'note'         => $row->note,
+            'created_at'   => (string) $row->created_at,
+            'amount'       => (float) $row->amount,
+            'paid'         => (float) $row->paid,
+            'remaining'    => (float) $row->remaining,
+            'origin_type'  => $row->origin_type ?? 'unknown',
+            'origin_id'    => isset($row->origin_id) ? (int) $row->origin_id : null,
+            'origin_label' => $row->origin_label ?? null,
+        ])->values();
+
+        // Nếu muốn trả kèm payments theo từng debt (1 call):
+        if ($r->boolean('include_payments')) {
+            $ids = $debts->pluck('id')->all();
+            if (!empty($ids)) {
+                $payments = DB::table('debt_payments as dp')
+                    ->leftJoin('users as u', 'u.id', '=', 'dp.created_by')
+                    ->selectRaw('
+                        dp.id,
+                        dp.debt_id,
+                        dp.amount,
+                        dp.note,
+                        dp.created_at,
+                        u.name as user_name
+                    ')
+                    ->whereIn('dp.debt_id', $ids)
+                    ->orderBy('dp.created_at', 'asc')
+                    ->get()
+                    ->groupBy('debt_id');
+
+                $debts = $debts->map(function ($d) use ($payments) {
+                    $items = ($payments->get($d['id']) ?? collect())->map(fn($p) => [
+                        'id'         => (int) $p->id,
+                        'amount'     => (float) $p->amount,
+                        'note'       => $p->note,
+                        'created_at' => (string) $p->created_at,
+                        'user_name'  => $p->user_name,
+                    ])->values();
+
+                    $d['payments'] = $items;
+                    return $d;
+                })->values();
+            } else {
+                $debts = $debts->map(function ($d) {
+                    $d['payments'] = [];
+                    return $d;
+                })->values();
+            }
+        }
+
+        return response()->json($debts);
     }
+
 
     public function payOne(Request $r, int $debtId)
     {
@@ -190,6 +284,7 @@ class DebtController extends Controller
             ->join('customers as c', 'c.id', '=', 'd.customer_id')
             ->selectRaw("
                 d.id,
+                d.paid_amount,
                 d.`$principal` as principal,
                 c.store_id,
                 (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining
@@ -197,7 +292,7 @@ class DebtController extends Controller
             ->where('d.id', $debtId)
             ->groupBy('d.id', "d.$principal", 'c.store_id')
             ->first();
-
+        $paidAmount = $row->paid_amount;
         if (!$row) return response()->json(['message' => 'Không tìm thấy khoản nợ'], 404);
 
         $storeId = $this->resolveStoreId($r);
@@ -218,6 +313,14 @@ class DebtController extends Controller
             'note'       => $note,
             'paid_at'    => now(),  
             'created_at' => now(),
+            'updated_at' => now(),
+            'created_by' => auth()->id(),
+        ]);
+        DB::table('debts')->where('id', $debtId)->update([
+            'paid_amount' => $paidAmount + $amount,
+            'status' => $row->remaining - $amount <= 0 ? 'paid' : 'partial',
+            'last_payment_amount' => $amount,
+            'last_payment_at' => now(),
             'updated_at' => now(),
         ]);
 
@@ -243,13 +346,14 @@ class DebtController extends Controller
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
             ->selectRaw(
                 "d.id,
+                d.paid_amount,
                 d.`$principal` as principal,
                 COALESCE(SUM(p.amount),0) as paid,
                 (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining"
             )
             ->where('d.customer_id', $customerId)
             ->groupBy('d.id', DB::raw("d.`$principal`"));
-
+        
         $openDebts = DB::query()
             ->fromSub($perDebt, 'x')
             ->where('x.remaining', '>', 0)
@@ -266,15 +370,67 @@ class DebtController extends Controller
                     'debt_id'    => $d->id,
                     'amount'     => (int) $d->remaining,
                     'note'       => 'Tất toán tự động',
-                    'paid_at'    => now(),       // ⚠️ bắt buộc nếu cột NOT NULL
+                    'paid_at'    => now(),
                     'created_at' => now(),
+                    'updated_at' => now(),
+                    'created_by' => auth()->id()
+                ]);
+
+                DB::table('debts')->where('id', $d->id)->update([
+                    'paid_amount' => $d->paid_amount + $d->remaining,
+                    'status' => 'paid',
+                    'last_payment_amount' => $d->remaining,
+                    'last_payment_at' => now(),
                     'updated_at' => now(),
                 ]);
             }
         });
+        
 
         return response()->json(['message' => 'Đã tất toán toàn bộ công nợ của khách']);
     }
+
+    public function paymentsByDebt(Request $r, int $debt)
+    {
+        $storeId = $this->resolveStoreId($r);
+
+        // ✅ Kiểm tra debt thuộc customer nào và customer thuộc store hiện tại
+        $debtRow = DB::table('debts as d')
+            ->join('customers as c', 'c.id', '=', 'd.customer_id')
+            ->where('d.id', $debt)
+            ->where('c.store_id', $storeId)
+            ->select('d.id')
+            ->first();
+
+        if (!$debtRow) {
+            return response()->json(['message' => 'Khoản nợ không thuộc cửa hàng'], 403);
+        }
+
+        $items = DB::table('debt_payments as dp')
+            ->leftJoin('users as u', 'u.id', '=', 'dp.user_id')
+            ->selectRaw('
+                dp.id,
+                dp.amount,
+                dp.method,
+                dp.note,
+                dp.created_at,
+                u.name as user_name
+            ')
+            ->where('dp.debt_id', $debt)
+            ->orderBy('dp.created_at', 'asc')
+            ->get()
+            ->map(fn($p) => [
+                'id'         => (int) $p->id,
+                'amount'     => (float) $p->amount,
+                'method'     => $p->method,
+                'note'       => $p->note,
+                'created_at' => (string) $p->created_at,
+                'user_name'  => $p->user_name,
+            ])->values();
+
+        return response()->json($items);
+    }
+
 
     private function debtPrincipalColumn(): string
     {
@@ -287,7 +443,7 @@ class DebtController extends Controller
     private function originCaseSelect(): array
     {
         // Hỗ trợ 2 kiểu phổ biến: debts.mobile_out_id, debts.service_id
-        $mobileCol = Schema::hasColumn('debts', 'mobileout_id') ? 'mobileout_id' : (Schema::hasColumn('debts', 'sale_id') ? 'sale_id' : null);
+        $mobileCol = Schema::hasColumn('debts', 'mobileout_id') ? 'mobileout_id' : null;
         $serviceCol = Schema::hasColumn('debts', 'service_id') ? 'service_id' : null;
 
         if ($mobileCol || $serviceCol) {

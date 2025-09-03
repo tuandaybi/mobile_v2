@@ -105,4 +105,90 @@ class CustomerController extends Controller
         $c->delete();
         return response()->json(['message'=>'Đã xoá.']);
     }
+
+    public function indexAdmin(Request $r)
+    {
+        $storeId = $this->resolveStoreId($r);
+
+        $search  = trim((string) $r->query('search', $r->query('q', '')));
+        $perPage = max(1, min((int) $r->query('perPage', 15), 200));
+        $page    = max(1, (int) $r->query('page', 1));
+
+        $sortable = ['id','name','phone','created_at','spent_total','debt_total'];
+        $sortBy   = in_array($r->query('sortBy'), $sortable, true) ? $r->query('sortBy') : 'id';
+        $sortDir  = strtolower($r->query('sortDir')) === 'asc' ? 'asc' : 'desc';
+
+        $q = Customer::query()
+            ->where('store_id', $storeId)
+            ->select(['id','store_id','name','phone','social_link','created_at'])
+            ->with(['store:id,name'])
+
+            // --- Tổng chi tiêu (giữ nguyên như trước) ---
+            ->withSum(['mobileOuts as spent_mobileout'], 'export_price')
+            ->withSum(['services as spent_service'], 'price')
+
+            // --- Tổng nợ từ bảng debts ---
+            // đổi 'debt' -> 'amount' nếu cột số tiền nợ tên khác
+            ->withSum(['debtsMobileOut as debt_mobileout'], 'debt')
+            ->withSum(['debtsService as debt_service'], 'debt')
+
+            // --- Tổng đã thanh toán ---
+            ->withSum(['paidsMobileOut as paid_mobileout'], 'paid_amount')
+            ->withSum(['paidsService as paid_service'], 'paid_amount')
+
+            // --- Tìm kiếm name/phone/social_link ---
+            ->when($search !== '', function ($w) use ($search) {
+                $like = "%{$search}%";
+                $w->where(function ($x) use ($like) {
+                    $x->where('name','like',$like)
+                    ->orWhere('phone','like',$like)
+                    ->orWhere('social_link','like',$like);
+                });
+            });
+
+        // Sort theo tổng cộng ảo
+        if ($sortBy === 'spent_total') {
+            $q->orderByRaw('(COALESCE(spent_mobileout,0)+COALESCE(spent_service,0)) '.$sortDir);
+        } elseif ($sortBy === 'debt_total') {
+            $q->orderByRaw('(COALESCE(debt_mobileout,0)+COALESCE(debt_service,0)) '.$sortDir);
+        } else {
+            $q->orderBy($sortBy, $sortDir);
+        }
+
+        $paginator = $q->paginate($perPage, ['*'], 'page', $page);
+
+        $paginator->getCollection()->transform(function ($c) {
+            $spent_mobileout = (float) ($c->spent_mobileout ?? 0);
+            $spent_service   = (float) ($c->spent_service ?? 0);
+            $debt_mobileout  = (float) ($c->debt_mobileout ?? 0);
+            $debt_service    = (float) ($c->debt_service ?? 0);
+            $paid_mobileout  = (float) ($c->paid_mobileout ?? 0);
+            $paid_service    = (float) ($c->paid_service ?? 0);
+
+            return [
+                'id'          => $c->id,
+                'name'        => $c->name,
+                'phone'       => $c->phone,
+                'social_link' => $c->social_link,
+                'store'       => [
+                    'id'   => $c->store?->id,
+                    'name' => $c->store?->name,
+                ],
+                'spent' => [
+                    'mobileout' => $spent_mobileout,
+                    'service'   => $spent_service,
+                    'total'     => $spent_mobileout + $spent_service,
+                ],
+                'debt'  => [
+                    'mobileout' => $debt_mobileout - $paid_mobileout,
+                    'service'   => $debt_service - $paid_service,
+                    'total'     => $debt_mobileout + $debt_service - $paid_mobileout - $paid_service,
+                ],
+                'created_at' => $c->created_at,
+            ];
+        });
+
+        return response()->json($paginator);
+    }
+
 }

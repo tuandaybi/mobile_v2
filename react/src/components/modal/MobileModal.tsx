@@ -45,7 +45,7 @@ export default function MobileModal() {
       const [cs, ss, ds] = await Promise.all([
         api.get('/admin/colors'),
         api.get('/admin/storages'),
-        api.get('/admin/devices'),
+        api.get('/admin/devices?active=1'),
       ]);
       setColors(toArray(cs));
       setStorages(toArray(ss));

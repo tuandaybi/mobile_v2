@@ -1,34 +1,19 @@
+// src/pages/DebtsPage.tsx
 import React, { useEffect, useMemo, useState } from "react";
 import MainLayout from "../components/layout/MainLayout";
-import {
-  Row,
-  Col,
-  Button,
-  Space,
-  message,
-  Modal,
-  Form,
-  InputNumber,
-  Select,
-} from "antd";
+import { Row, Col, Button, Space, message, Modal, Form, InputNumber, Select } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import PageTable from "@/components/shared/PageTable";
 import api from "../../axiosConfig";
 
-// Components tách riêng
-import DebtDetailDrawer, {
-  type DebtRecord,
-  type OpenDebt,
-} from "@/components/debt/DebtDetailDrawer";
-import OriginDetailModal, {
-  type MobileOutDetail,
-  type ServiceDetail,
-} from "@/components/debt/OriginDetailModal";
+// Components
+import DebtDetailDrawer, { type DebtRecord, type OpenDebt } from "@/components/debt/DebtDetailDrawer";
+import OriginDetailModal, { type MobileOutDetail, type ServiceDetail } from "@/components/debt/OriginDetailModal";
 
-// Zustand store (đã thêm debtDrawer, debtPay, debtOrigin)
+// Zustand
 import { useModalStore } from "@/store/modalStore";
 
-// ========================= Helpers =========================
+// ---------- Helpers ----------
 const toNum = (v: any) => {
   if (v == null) return 0;
   const n = Number(String(v).replace(/,/g, ""));
@@ -36,7 +21,6 @@ const toNum = (v: any) => {
 };
 const currency = (v: any) => `${toNum(v).toLocaleString()} đ`;
 
-// Chuẩn hoá dữ liệu chi tiết nguồn
 const normalizeMobileOut = (raw: any): MobileOutDetail => ({
   id: Number(raw?.id ?? raw?.data?.id ?? 0),
   code: raw?.code ?? raw?.order_code ?? (raw?.id ? `MO-${raw.id}` : undefined),
@@ -46,7 +30,7 @@ const normalizeMobileOut = (raw: any): MobileOutDetail => ({
         imei: i?.imei ?? i?.mb_imei ?? "",
         device_name: i?.device?.name ?? i?.device_name ?? i?.product_name ?? "",
         color: i?.color?.vi_name ?? i?.color ?? "",
-        storage: i?.storage?.size_gb ? `${i.storage.size_gb} GB` : (i?.storage ?? ""),
+        storage: i?.storage?.size_gb ? `${i.storage.size_gb} GB` : i?.storage ?? "",
         price: toNum(i?.price ?? i?.sale_price ?? i?.amount),
       }))
     : [],
@@ -70,36 +54,61 @@ const normalizeService = (raw: any): ServiceDetail => ({
   note: raw?.note ?? "",
 });
 
-// ========================= Component =========================
 const DebtsPage: React.FC = () => {
-  // ====== Store (Zustand) ======
-  const {
-    debtDrawer, debtPay, debtOrigin,
-  } = useModalStore();
+  const { debtDrawer, debtPay, debtOrigin } = useModalStore();
 
-  // Bảng tổng hợp theo khách
+  // Table data
   const [rows, setRows] = useState<DebtRecord[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // Chi tiết khoản nợ theo khách (list trong Drawer)
+  // Drawer chi tiết
   const [openDebts, setOpenDebts] = useState<OpenDebt[]>([]);
   const [loadingOpenDebts, setLoadingOpenDebts] = useState(false);
 
-  // Modal thanh toán 1 phần (dùng Form AntD nhưng state mở/đóng & field chính lấy từ store)
+  // Form pay
   const [payForm] = Form.useForm<{ debt_id: number; amount: number; note?: string }>();
   const [paying, setPaying] = useState(false);
 
-  // Modal nguồn phát sinh (loading cục bộ, còn open/type/id/data lấy từ store)
+  // Origin modal
   const [originLoading, setOriginLoading] = useState(false);
 
-  // ---------- Fetch ----------
-  const fetchSummary = async (q?: string) => {
+  // Pagination + sort
+  const [page, setPage] = useState(1);
+  const [perPage, setPerPage] = useState(14);
+  const [total, setTotal] = useState(0);
+  const [sortBy, setSortBy] = useState<"customer_name" | "phone" | "number_debt" | "debt_total" | "payment_total" | "total">("total");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
+  const [searchText, setSearchText] = useState("");
+
+  // ----- Fetch summary -----
+  const fetchSummary = async (
+    keyword = searchText,
+    nextPage = page,
+    nextPerPage = perPage,
+    nextSortBy = sortBy,
+    nextSortDir = sortDir
+  ) => {
     try {
       setLoading(true);
-      const res = await api.get("/debts/summary", { params: { q } });
-      const list: any[] = Array.isArray(res.data) ? res.data : [];
-      const mapped: DebtRecord[] = list.map((r: any) => ({
-        id: Number(r.customer_id), // alias để dùng rowKey="id"
+      const params: any = {
+        page: nextPage,
+        perPage: nextPerPage,
+        sortBy: nextSortBy,
+        sortDir: nextSortDir,
+      };
+      const q = (keyword ?? "").trim();
+      if (q) params.q = q;
+
+      const res = await api.get("/debts/summary", { params });
+
+      const payload = res.data;
+      const arr: any[] = Array.isArray(payload?.data)
+        ? payload.data
+        : Array.isArray(payload)
+        ? payload
+        : [];
+      setRows(arr.map((r: any) => ({
+        id: Number(r.customer_id),
         customer_id: Number(r.customer_id),
         customer_name: r.customer_name ?? "",
         phone: r.phone ?? "",
@@ -107,8 +116,28 @@ const DebtsPage: React.FC = () => {
         debt_total: toNum(r.debt_total),
         payment_total: toNum(r.payment_total),
         total: toNum(r.total),
-      }));
-      setRows(mapped);
+      })));
+
+          // ---- ĐỌC PAGER: hỗ trợ cả 2 kiểu ----
+    if (payload?.meta && typeof payload.meta.total === "number") {
+      // kiểu Resource: { data, links, meta:{ total, per_page, current_page, ... } }
+      setTotal(Number(payload.meta.total));
+      setPerPage(Number(payload.meta.per_page));
+      setPage(Number(payload.meta.current_page));
+    } else if (
+      typeof payload?.total === "number" &&
+      typeof payload?.per_page !== "undefined"
+    ) {
+      // kiểu paginator mặc định: { data, total, per_page, current_page, ... }
+      setTotal(Number(payload.total));
+      setPerPage(Number(payload.per_page));
+      setPage(Number(payload.current_page ?? 1));
+    } else {
+      // fallback
+      setTotal(arr.length);
+      setPerPage(nextPerPage);
+      setPage(1);
+    }
     } catch (e: any) {
       console.error(e);
       message.error(e?.response?.data?.message ?? "Lỗi tải dữ liệu công nợ");
@@ -117,10 +146,11 @@ const DebtsPage: React.FC = () => {
     }
   };
 
+  // ----- Fetch các khoản nợ mở theo khách -----
   const fetchOpenDebts = async (customer: DebtRecord) => {
     try {
       setLoadingOpenDebts(true);
-      const res = await api.get(`/debts/customer/${customer.customer_id}`);
+      const res = await api.get(`/debts/customer/${customer.customer_id}`, { params: { include_payments: true } });
       const list: any[] = Array.isArray(res.data) ? res.data : [];
       const mapped: OpenDebt[] = list.map((d: any) => ({
         id: Number(d.id),
@@ -132,8 +162,16 @@ const DebtsPage: React.FC = () => {
         origin_type: d.origin_type ?? "unknown",
         origin_id: d.origin_id != null ? Number(d.origin_id) : null,
         origin_label: d.origin_label ?? "",
+        payments: Array.isArray(d.payments)
+          ? d.payments.map((p: any) => ({
+              id: Number(p.id),
+              amount: toNum(p.amount),
+              note: p.note ?? "",
+              created_at: p.created_at,
+              user_name: p.user?.name ?? p.user_name ?? "",
+            }))
+          : [],
       }));
-      console.log("fetchOpenDebts -> ", mapped);
       setOpenDebts(mapped);
     } catch (e: any) {
       console.error(e);
@@ -143,11 +181,13 @@ const DebtsPage: React.FC = () => {
     }
   };
 
+  // lần đầu tải
   useEffect(() => {
     fetchSummary();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---------- Hành động ----------
+  // ----- Actions -----
   const handleShowDetail = async (record: DebtRecord) => {
     debtDrawer.open(record);
     await fetchOpenDebts(record);
@@ -163,7 +203,7 @@ const DebtsPage: React.FC = () => {
         try {
           await api.post(`/debts/settle-customer/${record.customer_id}`);
           message.success("Đã tất toán toàn bộ");
-          await fetchSummary();
+          await fetchSummary(); // giữ nguyên bộ lọc/phân trang hiện tại
           const cur = useModalStore.getState().debtDrawer.customer as DebtRecord | null;
           if (cur && cur.customer_id === record.customer_id) {
             await fetchOpenDebts(record);
@@ -180,7 +220,6 @@ const DebtsPage: React.FC = () => {
     debtPay.open(debtId, defaultAmount);
   };
 
-  // mở modal nguồn + fetch chi tiết rồi set về store
   const openOriginDetail = async (d: OpenDebt) => {
     useModalStore.getState().debtOrigin.open({
       originType: d.origin_type ?? "unknown",
@@ -194,14 +233,12 @@ const DebtsPage: React.FC = () => {
       setOriginLoading(true);
       if (d.origin_type === "mobile" && d.origin_id) {
         const res = await api.get(`/mobile-out/${d.origin_id}`);
-        console.log("fetchMobileOut -> data -> ", res.data);
         useModalStore.getState().debtOrigin.setRecord(normalizeMobileOut(res.data));
       } else if (d.origin_type === "service" && d.origin_id) {
         const res = await api.get(`/services/${d.origin_id}`);
         useModalStore.getState().debtOrigin.setRecord(normalizeService(res.data));
       } else {
         useModalStore.getState().debtOrigin.setRecord(null);
-        message.info("Khoản nợ này không có thông tin nguồn.");
       }
     } catch (e: any) {
       console.error(e);
@@ -217,53 +254,71 @@ const DebtsPage: React.FC = () => {
     debtPay.open(debtId, amount);
   };
 
-  // ---------- Bảng ----------
+  // ----- Columns -----
   const columns: ColumnsType<DebtRecord> = useMemo(
     () => [
-      { title: "Tên khách hàng", dataIndex: "customer_name", key: "customer_name" },
-      { title: "SĐT", dataIndex: "phone", key: "phone" },
-      { title: "Số lượng Debt", dataIndex: "number_debt", key: "number_debt" },
+      {
+        title: "Tên khách hàng",
+        dataIndex: "customer_name",
+        key: "customer_name",
+        sorter: true,
+        sortOrder: sortBy === "customer_name" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "SĐT",
+        dataIndex: "phone",
+        key: "phone",
+        sorter: true,
+        sortOrder: sortBy === "phone" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
+      {
+        title: "Số lượng Debt",
+        dataIndex: "number_debt",
+        key: "number_debt",
+        sorter: true,
+        sortOrder: sortBy === "number_debt" ? (sortDir === "asc" ? "ascend" : "descend") : null,
+      },
       {
         title: "Tổng tiền",
         dataIndex: "debt_total",
         key: "debt_total",
         render: (v: number) => currency(v),
+        sorter: true,
+        sortOrder: sortBy === "debt_total" ? (sortDir === "asc" ? "ascend" : "descend") : null,
       },
       {
         title: "Đã trả",
         dataIndex: "payment_total",
         key: "payment_total",
         render: (v: number) => currency(v),
+        sorter: true,
+        sortOrder: sortBy === "payment_total" ? (sortDir === "asc" ? "ascend" : "descend") : null,
       },
       {
         title: "Còn lại",
         dataIndex: "total",
         key: "total",
-        render: (v: number) => (
-          <span style={{ color: v > 0 ? "red" : "green" }}>{currency(v)}</span>
-        ),
+        render: (v: number) => <span style={{ color: v > 0 ? "red" : "green" }}>{currency(v)}</span>,
+        sorter: true,
+        sortOrder: sortBy === "total" ? (sortDir === "asc" ? "ascend" : "descend") : null,
       },
       {
         title: "Chức năng",
         key: "action",
         render: (_, record) => (
           <Space.Compact>
-            <Button size="small" onClick={() => handleShowDetail(record)}>
-              Chi tiết
-            </Button>
-            <Button danger size="small" onClick={() => handleSettleAll(record)}>
-              Tất toán
-            </Button>
+            <Button size="small" onClick={() => handleShowDetail(record)}>Chi tiết</Button>
+            <Button danger size="small" onClick={() => handleSettleAll(record)}>Tất toán</Button>
           </Space.Compact>
         ),
       },
     ],
-    []
+    [sortBy, sortDir]
   );
 
-  // ---------- Đồng bộ Form pay với store ----------
+  // Đồng bộ form pay khi mở
   useEffect(() => {
-  if (!debtPay.isOpen) return; // chỉ chạy khi đã mở Modal
+    if (!debtPay.isOpen) return;
     payForm.setFieldsValue({
       debt_id: debtPay.debtId && debtPay.debtId > 0 ? debtPay.debtId : undefined,
       amount: debtPay.amount ?? undefined,
@@ -280,30 +335,61 @@ const DebtsPage: React.FC = () => {
             data={rows}
             loading={loading}
             columns={columns}
-            pageSize={14}
+            pageSize={perPage}
             rowKey="id"
-            onSearch={(q) => fetchSummary(q)}
+            onSearch={(q) => {
+              setSearchText(q);
+              setPage(1);
+              fetchSummary(q, 1, perPage, sortBy, sortDir);
+            }}
             scrollX="max-content"
+            pagination={{
+              current: page,
+              pageSize: perPage,
+              total,
+              showSizeChanger: true,
+              pageSizeOptions: [10, 14, 20, 30, 50, 100],
+            }}
+            onTableChange={(pagination, _filters, sorter) => {
+              const nextPage = pagination.current || 1;
+              const nextPerPage = pagination.pageSize || perPage;
+
+              let nextSortBy = sortBy;
+              let nextSortDir: "asc" | "desc" = sortDir;
+
+              const s: any = Array.isArray(sorter) ? sorter[0] : sorter;
+              const allow = ["customer_name","phone","number_debt","debt_total","payment_total","total"];
+              if (s && s.field && allow.includes(s.field)) {
+                nextSortBy = s.field as typeof sortBy;
+                nextSortDir = s.order === "ascend" ? "asc" : "desc";
+              }
+
+              setPage(nextPage);
+              setPerPage(nextPerPage);
+              setSortBy(nextSortBy);
+              setSortDir(nextSortDir);
+
+              // giữ nguyên search hiện tại
+              fetchSummary(searchText, nextPage, nextPerPage, nextSortBy, nextSortDir);
+            }}
           />
         </Col>
       </Row>
 
-      {/* Drawer chi tiết các khoản nợ của 1 khách (open/close lấy từ store) */}
+      {/* Drawer chi tiết */}
       <DebtDetailDrawer
         open={debtDrawer.isOpen}
         onClose={debtDrawer.close}
         customer={debtDrawer.customer as DebtRecord | null}
         loading={loadingOpenDebts}
         debts={openDebts}
-        onRefresh={
-          debtDrawer.customer ? () => fetchOpenDebts(debtDrawer.customer as DebtRecord) : undefined
-        }
+        onRefresh={debtDrawer.customer ? () => fetchOpenDebts(debtDrawer.customer as DebtRecord) : undefined}
         onSettleAll={handleSettleAll}
         onPayClick={handlePayClick}
         onOriginClick={openOriginDetail}
       />
 
-      {/* Modal chi tiết nguồn phát sinh (Bán máy / Dịch vụ) */}
+      {/* Modal nguồn */}
       <OriginDetailModal
         open={debtOrigin.isOpen}
         loading={originLoading}
@@ -316,14 +402,11 @@ const DebtsPage: React.FC = () => {
         onPayRemaining={payRemainingFromOrigin}
       />
 
-      {/* Modal ghi nhận thanh toán một phần (state mở/đóng trong store) */}
+      {/* Modal thanh toán */}
       <Modal
         title="Ghi nhận thanh toán"
         open={debtPay.isOpen}
-        onCancel={() => {
-          payForm.resetFields();
-          debtPay.close();
-        }}
+        onCancel={() => { payForm.resetFields(); debtPay.close(); }}
         okText="Xác nhận"
         onOk={async () => {
           try {
@@ -333,12 +416,11 @@ const DebtsPage: React.FC = () => {
             message.success("Đã ghi nhận thanh toán");
             payForm.resetFields();
             debtPay.close();
-            // refresh summary + chi tiết nếu Drawer đang mở
-            await fetchSummary();
+            await fetchSummary(searchText, page, perPage, sortBy, sortDir);
             const cur = useModalStore.getState().debtDrawer.customer as DebtRecord | null;
             if (cur) await fetchOpenDebts(cur);
           } catch (e: any) {
-            if (e?.errorFields) return; // lỗi validate form
+            if (e?.errorFields) return;
             console.error(e);
             message.error(e?.response?.data?.message ?? "Lỗi khi thanh toán");
           } finally {
@@ -348,17 +430,10 @@ const DebtsPage: React.FC = () => {
         confirmLoading={paying}
       >
         <Form form={payForm} layout="vertical">
-          <Form.Item
-            name="debt_id"
-            label="Khoản nợ"
-            rules={[{ required: true, message: "Chọn khoản nợ" }]}
-          >
+          <Form.Item name="debt_id" label="Khoản nợ" rules={[{ required: true, message: "Chọn khoản nợ" }]}>
             <Select
               placeholder="Chọn khoản nợ muốn thanh toán"
-              options={openDebts.map((d) => ({
-                value: d.id,
-                label: `#${d.id} - Còn lại ${currency(d.remaining)}`,
-              }))}
+              options={openDebts.map(d => ({ value: d.id, label: `#${d.id} - Còn lại ${currency(d.remaining)}` }))}
               showSearch
               optionFilterProp="label"
               onChange={(v) => useModalStore.getState().debtPay.setFields({ debtId: v })}
@@ -366,19 +441,13 @@ const DebtsPage: React.FC = () => {
             />
           </Form.Item>
 
-          <Form.Item
-            name="amount"
-            label="Số tiền thanh toán"
-            rules={[{ required: true, message: "Nhập số tiền" }]}
-          >
+          <Form.Item name="amount" label="Số tiền thanh toán" rules={[{ required: true, message: "Nhập số tiền" }]}>
             <InputNumber
               min={1}
               step={1000}
               style={{ width: "100%" }}
-              onChange={(v) =>
-                useModalStore.getState().debtPay.setFields({ amount: Number(v) || 0 })
-              }
-              formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
+              onChange={(v) => useModalStore.getState().debtPay.setFields({ amount: Number(v) || 0 })}
+              formatter={(v) => String(v ?? "").replace(/\B(?=(\d{3})+(?!\d))/g, ",")}
               value={debtPay.amount ?? undefined}
             />
           </Form.Item>

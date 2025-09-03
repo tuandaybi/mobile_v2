@@ -19,6 +19,7 @@ import {
   LogoutOutlined,
   ShopOutlined,
   TeamOutlined,
+  AccountBookOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -49,7 +50,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
         { key: '/home', icon: <DashboardOutlined />, label: 'Trang chính' },
         { key: '/mobiles', icon: <MobileOutlined />, label: 'Quản lý điện thoại' },
         { key: '/services', icon: <ToolOutlined />, label: 'Quản lý dịch vụ' },
-        { key: '/debt', icon: <DollarOutlined />, label: 'Quản lý công nợ' },
+        { key: '/debts', icon: <DollarOutlined />, label: 'Quản lý công nợ' },
         { key: '/sold-products', icon: <FileDoneOutlined />, label: 'Sản phẩm đã bán' },
         { key: '/check-imei', icon: <BarcodeOutlined />, label: 'Check thông tin SP' },
       ],
@@ -60,6 +61,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
       children: [
         { key: '/report-profit', icon: <BarChartOutlined />, label: 'Báo cáo lợi nhuận' },
         { key: '/report-quantity', icon: <FileTextOutlined />, label: 'Báo cáo sản lượng' },
+        { key: '/report-debt', icon: <AccountBookOutlined />, label: 'Báo cáo công nợ' },
         { key: '#invoices', icon: <FileExcelOutlined />, label: 'Xuất Hóa Đơn' },
       ],
     },
@@ -87,8 +89,15 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
         collapsedWidth={0}
         onBreakpoint={(broken) => onCollapse(broken)}
         width={260}>
-      <div style={{ color: '#fff', padding: 16, fontWeight: 'bold', textAlign: 'center' }}>
-        Mobile Shop
+      <div style={{ color: '#fff', padding: 16, fontWeight: 'bold', textAlign: 'center', fontSize: 18 }}>
+        {(() => {
+          const user = localStorage.getItem('user');
+          try {
+            return user ? JSON.parse(user).store_name || 'Mobile Shop' : 'Mobile Shop';
+          } catch {
+            return 'Mobile Shop';
+          }
+        })()}
       </div>
       <Menu
         mode="inline"

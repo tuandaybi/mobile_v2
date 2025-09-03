@@ -1,7 +1,8 @@
+import { message } from 'antd';
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL,
+  baseURL: '/api',
   headers: {
     Accept: 'application/json',
     'Content-Type': 'application/json',
@@ -32,6 +33,9 @@ api.interceptors.response.use(
           window.location.href = '/login';
         }
       }
+    }
+    if (!error.config?.suppressToast) {
+      message.error(error.response?.data?.message || 'Có lỗi xảy ra');
     }
     return Promise.reject(error);
   }

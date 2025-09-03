@@ -5,6 +5,7 @@ use App\Http\Controllers\Concerns\ResolvesStore;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use App\Http\Requests\{ServiceStoreRequest, ServiceUpdateRequest};
+use App\Http\Controllers\Traits\IndexHelpers;
 use App\Http\Resources\ServiceResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,31 +14,51 @@ use App\Models\Debt;
 use Carbon\Carbon;
 
 
+
 class ServiceController extends Controller
 {
     use ResolvesStore;
+    use IndexHelpers;
 
     public function index(Request $r)
     {
         $storeId = $this->resolveStoreId($r);
 
-        $q = Service::with(['customer:id,name,phone','user:id,name'])
-            ->where('store_id', $storeId);
+        // Join để sort/search theo khách hàng
+        $q = Service::query()
+            ->with(['customer:id,name,phone', 'user:id,name'])
+            ->leftJoin('customers as c', 'c.id', '=', 'services.customer_id')
+            ->where('services.store_id', $storeId)
+            ->select('services.*');
 
-        if ($s = trim((string)$r->input('q'))) {
-            $q->where(fn($w)=>$w->where('name','like',"%{$s}%")->orWhere('note','like',"%{$s}%"));
-        }
-        if ($r->filled('customer_id')) $q->where('customer_id',$r->input('customer_id'));
-        if ($f = $r->input('date_from')) $q->whereDate('created_at','>=',$f);
-        if ($t = $r->input('date_to'))   $q->whereDate('created_at','<=',$t);
 
-        $sortable = ['id','name','price','created_at'];
-        $sortBy = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
-        $sortDir = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
-        $q->orderBy($sortBy, $sortDir);
+        $this->applySearch($q, $r->input('q'), [
+            'services.name',   
+            'services.note',
+            'c.name',
+            'c.phone',
+        ]);
 
-        $perPage = max(1, min((int)$r->input('perPage', 15), 200));
-        return ServiceResource::collection($q->paginate($perPage));
+        // Filter thời gian
+        if ($f = $r->input('date_from')) $q->whereDate('services.created_at', '>=', $f);
+        if ($t = $r->input('date_to'))   $q->whereDate('services.created_at', '<=', $t);
+        if ($r->filled('customer_id'))   $q->where('services.customer_id', $r->input('customer_id'));
+
+        // Whitelist sort map: FE key -> DB column
+        $sortMap = [
+            'id'            => 'services.id',
+            'name'          => 'services.name',
+            'price'         => 'services.price',
+            'cost'          => 'services.expense',
+            'date'          => 'services.created_at',
+            'customer_name' => 'c.name',
+            'phone'         => 'c.phone',
+        ];
+        $this->applySort($q, $r, $sortMap, 'date', 'desc');
+
+        $paginator = $q->paginate($this->perPage($r))->appends($r->query());
+
+        return ServiceResource::collection($paginator);
     }
 
     public function store(ServiceStoreRequest $r)
@@ -47,7 +68,7 @@ class ServiceController extends Controller
         $data    = $r->validated();
 
         // Chuẩn hoá tên dịch vụ: nhận name hoặc service_name
-        $data['name'] = $data['name'] ?? ($data['service_name'] ?? null);
+        $data['name'] = $data['name'] ?? null;
         if (empty($data['name'])) {
             return response()->json(['message' => 'Thiếu tên dịch vụ'], 422);
         }
@@ -66,8 +87,6 @@ class ServiceController extends Controller
             if ($phone) {
                 if (Schema::hasColumn($customerTable, 'phone')) {
                     $attrs['phone'] = $phone;
-                } elseif (Schema::hasColumn($customerTable, 'phone_number')) {
-                    $attrs['phone_number'] = $phone;
                 }
             }
 
@@ -77,7 +96,7 @@ class ServiceController extends Controller
                 $customer->save();
             } elseif ($phone) {
                 $needSave = false;
-                if (Schema::hasColumn($customerTable, 'phone_number') && empty($customer->phone_number)) {
+                if (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone_number)) {
                     $customer->phone_number = $phone; $needSave = true;
                 } elseif (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone)) {
                     $customer->phone = $phone; $needSave = true;
@@ -92,7 +111,7 @@ class ServiceController extends Controller
         unset($data['customer_name'], $data['phone_number'], $data['service_name']);
 
         // Chuẩn hoá số
-        foreach (['service_price', 'expense', 'warranty', 'debt'] as $numField) {
+        foreach (['price', 'expense', 'warranty', 'debt'] as $numField) {
             if (array_key_exists($numField, $data) && $data[$numField] !== null) {
                 $data[$numField] = (float)str_replace(',', '', (string)$data[$numField]);
             }

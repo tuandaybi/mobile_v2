@@ -6,6 +6,7 @@ use App\Http\Controllers\Concerns\ResolvesStore;
 use App\Models\MobileIn;
 use Illuminate\Http\Request;
 use App\Http\Requests\{MobileInStoreRequest, MobileInUpdateRequest};
+use App\Http\Controllers\Traits\IndexHelpers;
 use App\Http\Resources\MobileInResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -13,10 +14,10 @@ use Illuminate\Support\Facades\Schema;
 class MobileInController extends Controller
 {
     use ResolvesStore;
+    use IndexHelpers;
 
     public function index(Request $r)
     {
-        // Lấy user + storeIds từ pivot user_in_store (user_id/store_id)
         $user = $r->user('sanctum') ?? $r->user();
         if (!$user) return response()->json(['message' => 'Unauthorized'], 401);
 
@@ -42,27 +43,33 @@ class MobileInController extends Controller
                 'storage:id,name,size_gb',
                 'mobileOut:id,mobile_in_id,export_date,export_price',
             ])
-            ->whereIn('store_id', $storeIds)->where('is_sold', 0);
+            ->whereIn('store_id', $storeIds);
 
-        // Search text
+        // ✅ Mặc định là chưa bán, nhưng nếu client truyền sold thì override
+        if ($r->has('sold')) {
+            $q->where('is_sold', (int)$r->input('sold') ? 1 : 0);
+        } else {
+            $q->where('is_sold', 0);
+        }
+
         if ($s = trim((string)$r->input('q'))) {
             $q->where(function($w) use ($s) {
                 $w->where('imei','like',"%{$s}%")
-                  ->orWhere('country_code','like',"%{$s}%")
-                  ->orWhere('import_note','like',"%{$s}%")
-                  ->orWhere('supplier','like',"%{$s}%");
+                ->orWhere('country_code','like',"%{$s}%")
+                ->orWhere('import_note','like',"%{$s}%")
+                ->orWhere('supplier','like',"%{$s}%")
+                ->orWhereHas('device', function($d) use ($s) {
+                    $d->where('name','like',"%{$s}%")
+                        ->orWhere('code','like',"%{$s}%");
+                });
             });
         }
 
-        // Chỉ cho phép filter các cột KHÔNG liên quan user/store
         foreach (['device_id','color_id','storage_id'] as $col) {
             if ($r->filled($col)) $q->where($col, $r->input($col));
         }
         if ($r->filled('supplier')) {
             $q->where('supplier','like','%'.$r->input('supplier').'%');
-        }
-        if ($r->filled('sold')) {
-            $q->where('is_sold', (int)$r->input('sold') ? 1 : 0);
         }
         if ($f = $r->input('date_from')) $q->whereDate('import_date','>=',$f);
         if ($t = $r->input('date_to'))   $q->whereDate('import_date','<=',$t);
@@ -73,6 +80,7 @@ class MobileInController extends Controller
         $q->orderBy($sortBy, $sortDir);
 
         $perPage = max(1, min((int)$r->input('perPage', 15), 200));
+
         return MobileInResource::collection($q->paginate($perPage));
     }
 
