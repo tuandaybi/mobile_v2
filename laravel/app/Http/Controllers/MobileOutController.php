@@ -6,6 +6,7 @@ use App\Models\Customer;
 use App\Models\MobileIn;
 use App\Models\MobileOut;
 use App\Models\Debt;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use App\Http\Requests\{MobileOutStoreRequest, MobileOutUpdateRequest};
 use App\Http\Resources\MobileOutResource;
@@ -36,6 +37,7 @@ class MobileOutController extends Controller
             ])
             ->leftJoin('mobile_in as mi', 'mi.id', '=', 'mobile_out.mobile_in_id')
             ->leftJoin('customers as c', 'c.id', '=', 'mobile_out.customer_id')
+            ->leftJoin('users as u', 'u.id', '=', 'mobile_out.user_id')
             ->leftJoin('devices as d', 'd.id', '=', 'mi.device_id')
             ->leftJoin('colors as co', 'co.id', '=', 'mi.color_id')
             ->leftJoin('storages as st', 'st.id', '=', 'mi.storage_id')
@@ -74,6 +76,7 @@ class MobileOutController extends Controller
             'device_name'   => 'd.name',
             'imei'          => 'mi.imei',
             'customer_name' => 'c.name',
+            'user_name'     => 'u.name',
             'phone'         => 'c.phone',
         ];
         $sortBy  = (string) $r->input('sortBy', 'id');
@@ -136,11 +139,13 @@ class MobileOutController extends Controller
         }
 
         unset($data['customer_name'], $data['phone_number']);
-
+        
         // ====== Transaction: tạo bán + cập nhật is_sold + (tạo Debt nếu có nợ) + cộng dồn nợ vào customers ======
         [$sale, $createdDebt] = DB::transaction(function () use ($data, $userId, $mob, $storeId) {
             // 1) Tạo phiếu bán
             $sale = MobileOut::create($data + ['user_id' => $userId]);
+            $debt_amount = number_format((float)($data['debt_amount'] ?? 0)). "đ";
+            $notiDebt = $sale->debt_amount > 0 ? " (nợ lại {$debt_amount})" : '';
 
             // 2) Đánh dấu đã bán
             $mob->update(['is_sold' => 1]);
@@ -159,6 +164,7 @@ class MobileOutController extends Controller
                     'mobileout_id'        => $sale->id,
                     'service_id'          => null,
                     'customer_id'         => $data['customer_id'],
+                    'user_id'             => $userId,
                     'debt'                => $debtToAdd,
                     'paid_amount'         => 0,
                     'last_payment_amount' => null,
@@ -169,6 +175,31 @@ class MobileOutController extends Controller
                     'note'                => 'Nợ phát sinh từ bán máy #'.$sale->id,
                 ]);
             }
+        
+        //Tạo thông báo
+        $deviceName = $mob->device->name ?? '';
+        $customerName = optional($sale->customer)->name ?? '';
+        $salePrice = number_format((int) ($sale->export_price ?? 0)). "đ";
+
+        $noti = Notification::create([
+            'store_id'   => $storeId,
+            'created_by' => $userId,
+            'type'       => 'log',
+            'title'      => 'Bán máy',
+            'body'       => "Đã bán {$deviceName} (IMEI: {$mob->imei}) cho khách {$customerName} với giá {$salePrice} {$notiDebt}",
+            'ref_type'   => 'mobile_out',
+            'ref_id'     => $mob->id,
+            'priority'   => 'normal',
+        ]);
+
+        // Đính kèm recipients: toàn bộ user trong store
+        $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+        DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+            'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+            'user_id' => $uid,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $uids));
 
             return [$sale, $createdDebt];
         });
@@ -270,6 +301,7 @@ class MobileOutController extends Controller
             'id'            => (int) $sale->id,
             'code'          => $code,
             'customer_name' => $customerName,
+            'user_name'     => optional($sale->user)->name ?? null,
             'items'         => $items,           // mỗi item.price = giá của mobile_out
             'subtotal'      => $salePrice,       // FE sẽ đọc subtotal/total/amount — ở đây trả về subtotal
             'paid'          => $paid,
@@ -420,6 +452,7 @@ class MobileOutController extends Controller
                     Debt::create([
                         'customer_id'   => $data['customer_id'] ?? $sale->customer_id,
                         'mobileout_id' => $sale->id,
+                        'user_id'      => $r->user() ? $r->user()->id : null,
                         'debt'          => $incomingDebt,
                         'date'          => $debtDate,
                         'note'          => $r->input('debt_note') ?: ('Nợ phát sinh từ bán máy #' . $sale->id),

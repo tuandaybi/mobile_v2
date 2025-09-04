@@ -14,6 +14,7 @@ class StoreDebtRequest extends FormRequest
             'mobileout_id' => ['nullable','integer','exists:mobile_outs,id'],
             'service_id'   => ['nullable','integer','exists:services,id'],
             'customer_id'  => ['nullable','integer','exists:customers,id'],
+            'user_id'      => ['nullable','integer','exists:users,id'],
             'debt'         => ['required','numeric','min:0.01'],
             'date'         => ['required','date'],
             'due_date'     => ['nullable','date','after_or_equal:date'],

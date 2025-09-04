@@ -25,6 +25,7 @@ const normalizeMobileOut = (raw: any): MobileOutDetail => ({
   id: Number(raw?.id ?? raw?.data?.id ?? 0),
   code: raw?.code ?? raw?.order_code ?? (raw?.id ? `MO-${raw.id}` : undefined),
   customer_name: raw?.customer?.name ?? raw?.customer_name ?? raw?.buyer ?? undefined,
+  user_name: raw?.user?.name ?? raw?.user_name ?? "",
   items: Array.isArray(raw?.items)
     ? raw.items.map((i: any) => ({
         imei: i?.imei ?? i?.mb_imei ?? "",
@@ -45,6 +46,7 @@ const normalizeService = (raw: any): ServiceDetail => ({
   id: Number(raw?.id ?? raw?.data?.id ?? 0),
   service_name: raw?.service_name ?? raw?.name ?? "",
   customer_name: raw?.customer?.name ?? raw?.customer_name ?? "",
+  user_name: raw?.user?.name ?? raw?.user_name ?? "",
   service_date: raw?.service_date ?? raw?.created_at,
   service_price: toNum(raw?.service_price ?? raw?.price ?? raw?.amount),
   expense: toNum(raw?.expense ?? 0),

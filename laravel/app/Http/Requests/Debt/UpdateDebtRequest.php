@@ -15,6 +15,7 @@ class UpdateDebtRequest extends FormRequest
             'mobileout_id' => ['sometimes','nullable','integer','exists:mobile_outs,id'],
             'service_id'   => ['sometimes','nullable','integer','exists:services,id'],
             'customer_id'  => ['sometimes','nullable','integer','exists:customers,id'],
+            'user_id'      => ['sometimes','nullable','integer','exists:users,id'],
             'debt'         => ['sometimes','numeric','min:0.01'],
             'date'         => ['sometimes','date'],
             'due_date'     => ['sometimes','nullable','date','after_or_equal:date'],

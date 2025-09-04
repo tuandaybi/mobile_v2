@@ -15,6 +15,7 @@ export type MobileOutDetail = {
   id: number;
   code?: string;
   customer_name?: string;
+  user_name?: string;
   items: MobileOutItem[];
   subtotal: number | string;
   paid: number | string;
@@ -26,6 +27,7 @@ export type ServiceDetail = {
   id: number;
   service_name?: string;
   customer_name?: string;
+  user_name?: string;
   service_date?: string;
   service_price: number | string;
   expense?: number | string;
@@ -112,6 +114,7 @@ const OriginDetailModal: React.FC<Props> = ({
                 <Descriptions.Item label="Mã đơn">{d.code || `Mobile ID -${d.id}`}</Descriptions.Item>
                 <Descriptions.Item label="Ngày">{fmtDate(d.date)}</Descriptions.Item>
                 <Descriptions.Item label="Khách hàng">{d.customer_name || '—'}</Descriptions.Item>
+                <Descriptions.Item label="Nhân viên">{d.user_name || '—'}</Descriptions.Item>
                 <Descriptions.Item label="Ghi chú">{d.note || '—'}</Descriptions.Item>
               </Descriptions>
               <div style={{ marginTop: 12 }} />
@@ -134,6 +137,7 @@ const OriginDetailModal: React.FC<Props> = ({
                 <Descriptions.Item label="Mã dịch vụ">{`Service ID - ${s.id}`}</Descriptions.Item>
                 <Descriptions.Item label="Ngày">{fmtDate(s.service_date)}</Descriptions.Item>
                 <Descriptions.Item label="Khách hàng">{s.customer_name || '—'}</Descriptions.Item>
+                <Descriptions.Item label="Nhân viên">{s.user_name || '—'}</Descriptions.Item>
                 <Descriptions.Item label="Dịch vụ">{s.service_name || '—'}</Descriptions.Item>
                 <Descriptions.Item label="Bảo hành (tháng)">{s.warranty ?? 0}</Descriptions.Item>
                 <Descriptions.Item label="Giá dịch vụ">{currency(s.service_price ?? 0)}</Descriptions.Item>

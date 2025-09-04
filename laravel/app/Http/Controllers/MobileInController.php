@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesStore;
 use App\Models\MobileIn;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use App\Http\Requests\{MobileInStoreRequest, MobileInUpdateRequest};
 use App\Http\Controllers\Traits\IndexHelpers;
@@ -100,7 +101,6 @@ class MobileInController extends Controller
             ])
             ->whereIn('store_id', $storeIds)
             ->findOrFail($id);
-
         return new MobileInResource($data);
     }
 
@@ -136,6 +136,32 @@ class MobileInController extends Controller
                 'is_sold'  => 0,
             ])->load(['device','color','storage','store','user','mobileOut']);
         });
+
+        $deviceName = $mob->device->name ?? '';
+        $deviceCountryCode = $mob->country_code ?? '';
+        $deviceStorage = $mob->storage->name ?? '';
+        $deviceColor = $mob->color->en_name ?? '';
+
+        //Tạo thông báo
+        $noti = Notification::create([
+            'store_id'   => $storeId,
+            'created_by' => $user->id,
+            'type'       => 'log',
+            'title'      => 'Nhập máy',
+            'body'       => "Đã nhập {$deviceName} {$deviceCountryCode} {$deviceStorage} {$deviceColor} (IMEI: {$mob->imei})",
+            'ref_type'   => 'mobile_in',
+            'ref_id'     => $mob->id,
+            'priority'   => 'normal',
+        ]);
+
+        // Đính kèm recipients: toàn bộ user trong store
+        $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+        DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+            'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+            'user_id' => $uid,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $uids));
 
         return (new MobileInResource($mob))->response()->setStatusCode(201);
     }

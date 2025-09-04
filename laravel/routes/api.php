@@ -3,7 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     MobileInController, MobileOutController, PurchaseInvoiceController, 
     ServiceController, AuthController, DebtController, HomeController,
-    ReportController
+    ReportController, InboxController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -11,7 +11,7 @@ use App\Http\Controllers\admin\{
     SupplierController, UserController
 };
 
-Route::get('/_ping', fn() => response()->json(['ok' => true]));
+Route::get('/ping', fn() => response()->json(['ok' => true]));
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:10,1');
@@ -57,11 +57,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/reports/debt-summary', [ReportController::class, 'debtSummary']);
 
     //Notifications
-    Route::get('/inbox',           [InboxController::class, 'index']);     // list + unread count
-    Route::post('/inbox',          [InboxController::class, 'store']);     // tạo log/ann
-    Route::get('/inbox/{id}',      [InboxController::class, 'show']);      // chi tiết + comments
-    Route::post('/inbox/{id}/read',[InboxController::class, 'markRead']);  // đánh dấu đã đọc
-    Route::post('/inbox/{id}/comment',[InboxController::class, 'comment']); // gửi bình luận
+    Route::get('/inbox', [InboxController::class, 'index']);
+    Route::post('/inbox', [InboxController::class, 'store']);
+    Route::get('/inbox/{id}', [InboxController::class, 'show']);
+    Route::post('/inbox/{id}/read', [InboxController::class, 'markRead']);
+    Route::post('/inbox/read-all', [InboxController::class, 'readAll']); // optional
+    Route::post('/inbox/{id}/comment', [InboxController::class, 'comment']);
 
     // Purchase Invoices
     //Route::apiResource('purchase-invoices', PurchaseInvoiceController::class)->except(['create','edit']);

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Controllers;
 use App\Models\Debt;
+use App\Models\Notification;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use App\Http\Resources\DebtResource;
@@ -90,9 +91,8 @@ class DebtController extends Controller
 
     public function summary(Request $r)
     {
-        $storeId = $this->resolveStoreId($r);
-        $s       = trim((string) $r->input('q', ''));
-
+        $storeId   = $this->resolveStoreId($r);
+        $s         = trim((string) $r->input('q', ''));
         $principal = $this->debtPrincipalColumn(); // vd: "debt"
 
         // Mỗi khoản nợ: principal, paid, remaining
@@ -105,7 +105,7 @@ class DebtController extends Controller
                 COALESCE(SUM(p.amount), 0) AS paid,
                 (d.`$principal` - COALESCE(SUM(p.amount), 0)) AS remaining
             ")
-            ->groupBy('d.id', 'd.customer_id', "d.$principal");
+            ->groupBy('d.id', 'd.customer_id', DB::raw("d.`$principal`"));
 
         // Chỉ lấy nợ còn lại > 0
         $openDebts = DB::query()
@@ -125,22 +125,21 @@ class DebtController extends Controller
                 });
             })
             ->selectRaw('
-                c.id   AS customer_id,
-                c.name AS customer_name,
+                c.id    AS customer_id,
+                c.name  AS customer_name,
                 c.phone AS phone,
-                COUNT(*)              AS number_debt,
-                SUM(y.principal)      AS debt_total,
-                SUM(y.paid)           AS payment_total,
-                SUM(y.remaining)      AS total
+                COUNT(*)         AS number_debt,
+                SUM(y.principal) AS debt_total,
+                SUM(y.paid)      AS payment_total,
+                SUM(y.remaining) AS total
             ')
-            ->groupBy('c.id', 'c.name', 'c.phone');
+            ->groupBy('c.id', 'c.name', 'c.phone'); // <-- group theo user_name
 
         // ---- sort được phép ----
         $sortable = ['customer_name','phone','number_debt','debt_total','payment_total','total'];
         $sortBy   = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'total';
         $sortDir  = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
 
-        // Dùng biểu thức trực tiếp để tránh tùy DB không cho order alias
         switch ($sortBy) {
             case 'customer_name':
                 $base->orderBy('c.name', $sortDir);
@@ -167,9 +166,9 @@ class DebtController extends Controller
         $perPage = max(1, min((int)$r->input('perPage', 14), 200));
         $p = $base->paginate($perPage)->appends($r->query());
 
-        // Trả về đúng JSON paginator của Laravel (data/links/meta)
         return response()->json($p);
     }
+
 
     public function openDebtsByCustomer(Request $r, int $customer)
     {
@@ -284,6 +283,7 @@ class DebtController extends Controller
             ->join('customers as c', 'c.id', '=', 'd.customer_id')
             ->selectRaw("
                 d.id,
+                d.customer_id,
                 d.paid_amount,
                 d.`$principal` as principal,
                 c.store_id,
@@ -296,6 +296,9 @@ class DebtController extends Controller
         if (!$row) return response()->json(['message' => 'Không tìm thấy khoản nợ'], 404);
 
         $storeId = $this->resolveStoreId($r);
+        $userId  = $r->user()->id;
+        $customerName = DB::table('customers')->where('id', $row->customer_id)->value('name');
+
         if ((int) $row->store_id !== (int) $storeId) {
             return response()->json(['message' => 'Khoản nợ không thuộc cửa hàng của bạn'], 403);
         }
@@ -323,6 +326,27 @@ class DebtController extends Controller
             'last_payment_at' => now(),
             'updated_at' => now(),
         ]);
+        //Tạo thông báo
+        $amount = number_format($amount). "đ";
+        $noti = Notification::create([
+            'store_id'   => $storeId,
+            'created_by' => $userId,
+            'type'       => 'log',
+            'title'      => 'Thu nợ',
+            'body'       => "Đã thu nợ {$amount} từ khách {$customerName}",
+            'ref_type'   => 'debt',
+            'ref_id'     => $debtId,
+            'priority'   => 'normal',
+        ]);
+
+        // Đính kèm recipients: toàn bộ user trong store
+        $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+        DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+            'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+            'user_id' => $uid,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ], $uids));
 
         return response()->json(['message' => 'Đã ghi nhận thanh toán']);
     }
@@ -330,6 +354,7 @@ class DebtController extends Controller
     public function settleCustomer(Request $r, int $customerId)
     {
         $storeId   = $this->resolveStoreId($r);
+        $userId  = $r->user()->id;
         $principal = $this->debtPrincipalColumn();
 
         // Khách phải thuộc store hiện tại
@@ -340,6 +365,9 @@ class DebtController extends Controller
         if (!$valid) {
             return response()->json(['message' => 'Khách không thuộc cửa hàng'], 403);
         }
+
+        //Lấy tên khách ghi Log
+        $customerName = DB::table('customers')->where('id', $customerId)->value('name');
 
         // Tính remaining cho từng debt (dùng subquery để gọn và tránh ONLY_FULL_GROUP_BY)
         $perDebt = DB::table('debts as d')
@@ -364,7 +392,7 @@ class DebtController extends Controller
             return response()->json(['message' => 'Không còn nợ để tất toán'], 409);
         }
 
-        DB::transaction(function () use ($openDebts) {
+        DB::transaction(function () use ($openDebts, $userId, $storeId, $customerName) {
             foreach ($openDebts as $d) {
                 DB::table('debt_payments')->insert([
                     'debt_id'    => $d->id,
@@ -383,6 +411,28 @@ class DebtController extends Controller
                     'last_payment_at' => now(),
                     'updated_at' => now(),
                 ]);
+
+                //Tạo thông báo
+                $amount = number_format((int) ($d->remaining ?? 0)). "đ";
+                $noti = Notification::create([
+                    'store_id'   => $storeId,
+                    'created_by' => $userId,
+                    'type'       => 'log',
+                    'title'      => 'Thu nợ',
+                    'body'       => "Đã thu nợ {$amount} từ khách {$customerName}",
+                    'ref_type'   => 'debt',
+                    'ref_id'     => $d->id,
+                    'priority'   => 'normal',
+                ]);
+
+                // Đính kèm recipients: toàn bộ user trong store
+                $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+                DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                    'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                    'user_id' => $uid,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ], $uids));
             }
         });
         

@@ -80,19 +80,28 @@ export default function NotificationDropdown() {
     }
   };
 
-  // mở popover thì tải tab hiện tại
-  useEffect(() => { if (open) fetchTab(activeKey, true); }, [open, activeKey, onlyUnread]);
+  const fetchUnreadCount = async () => {
+  try {
+    const res = await api.get<InboxResp>('/inbox', {
+      params: { perPage: 1 },
+      suppressToast: true as any,
+    });
+    setUnread(res.data.meta?.unread_count || 0);
+  } catch {}
+};
 
-  // polling badge 30s
-  useEffect(() => {
-    const t = setInterval(async () => {
-      try {
-        //const res = await api.get<InboxResp>('/inbox', { params: { perPage: 1 }, suppressToast: true as any });
-        //setUnread(res.data.meta?.unread_count || 0);
-      } catch {}
-    }, 10000);
-    return () => clearInterval(t);
-  }, []);
+useEffect(() => {
+  fetchUnreadCount();             // lấy unread
+  // Prefetch tab mặc định (optional)
+  fetchTab('general', true);      // để có dữ liệu luôn nếu muốn
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []);
+
+// 2) Poll mỗi 30s
+useEffect(() => {
+  const t = setInterval(fetchUnreadCount, 15000);
+  return () => clearInterval(t);
+}, []);
 
   const hasMore = useMemo(() => {
     const totalForTab = total[activeKey] || 0;

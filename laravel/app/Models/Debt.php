@@ -15,6 +15,7 @@ class Debt extends Model
         'mobileout_id',
         'service_id',
         'customer_id',
+        'user_id',
         'debt',
         'paid_amount',
         'last_payment_amount',
@@ -38,6 +39,7 @@ class Debt extends Model
     public function mobileOut() { return $this->belongsTo(\App\Models\MobileOut::class, 'mobileout_id'); }
     public function service()   { return $this->belongsTo(\App\Models\Service::class, 'service_id'); }
     public function customer()  { return $this->belongsTo(\App\Models\Customer::class, 'customer_id'); }
+    public function user()      { return $this->belongsTo(\App\Models\User::class, 'user_id'); }
     public function payments()  { return $this->hasMany(\App\Models\DebtPayment::class); }
 
     // Số còn nợ

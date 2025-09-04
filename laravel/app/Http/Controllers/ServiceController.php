@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use App\Models\Customer;
 use App\Models\Debt;
+use App\Models\Notification;
 use Carbon\Carbon;
 
 
@@ -28,6 +29,7 @@ class ServiceController extends Controller
         $q = Service::query()
             ->with(['customer:id,name,phone', 'user:id,name'])
             ->leftJoin('customers as c', 'c.id', '=', 'services.customer_id')
+            ->leftJoin('users as u', 'u.id', '=', 'services.user_id')
             ->where('services.store_id', $storeId)
             ->select('services.*');
 
@@ -37,6 +39,7 @@ class ServiceController extends Controller
             'services.note',
             'c.name',
             'c.phone',
+            'u.name',
         ]);
 
         // Filter thời gian
@@ -53,6 +56,7 @@ class ServiceController extends Controller
             'date'          => 'services.created_at',
             'customer_name' => 'c.name',
             'phone'         => 'c.phone',
+            'user_name'     => 'u.name',
         ];
         $this->applySort($q, $r, $sortMap, 'date', 'desc');
 
@@ -129,7 +133,7 @@ class ServiceController extends Controller
 
             // 1) Tạo service
             $service = Service::create($data);
-
+            
             // 2) Nếu có nợ => tạo bản ghi Debt (không đụng customers.debt)
             $createdDebt = null;
             $debtToAdd   = (float)($data['debt'] ?? 0);
@@ -145,7 +149,8 @@ class ServiceController extends Controller
                 $createdDebt = Debt::create([
                     'mobileout_id'        => null,
                     'service_id'          => $service->id,
-                    'customer_id'         => $data['customer_id'],
+                    'customer_id'         => $service->customer_id,
+                    'user_id'             => $service->user_id,
                     'debt'                => $debtToAdd,
                     'paid_amount'         => 0,
                     'last_payment_amount' => null,
@@ -156,6 +161,32 @@ class ServiceController extends Controller
                     'note'                => 'Nợ phát sinh từ dịch vụ #'.$service->id,
                 ]);
             }
+
+            //Tạo thông báo
+            $serviceName = $service->name ?? '';
+            $customerName = optional($service->customer)->name ?? '';
+            $salePrice = number_format((int) ($service->price ?? 0)). "đ";
+            $notiDebt = $debtToAdd > 0 ? " (nợ lại ". number_format((float)$debtToAdd)."đ)" : '';
+
+            $noti = Notification::create([
+                'store_id'   => $service->store_id,
+                'created_by' => $service->user_id,
+                'type'       => 'log',
+                'title'      => 'Dịch vụ',
+                'body'       => "{$serviceName} cho khách {$customerName} với giá {$salePrice} {$notiDebt}",
+                'ref_type'   => 'service',
+                'ref_id'     => $service->id,
+                'priority'   => 'normal',
+            ]);
+
+            // Đính kèm recipients: toàn bộ user trong store
+            $uids = DB::table('user_in_store')->where('store_id', $service->store_id)->pluck('user_id')->all();
+            DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                'user_id' => $uid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $uids));
 
             return [$service, $createdDebt];
         });
@@ -181,13 +212,14 @@ class ServiceController extends Controller
 
     public function show($id)
     {
-        $s = Service::with('customer')->findOrFail($id);
+        $s = Service::with(['customer', 'user'])->findOrFail($id);
 
         // tuỳ schema thực tế, map về payload FE đang đọc
         return response()->json([
             'id'            => $s->id,
             'service_name'  => $s->service_name ?? $s->name,
             'customer_name' => optional($s->customer)->name,
+            'user_name'     => optional($s->user)->name,
             'service_date'  => $s->service_date ?? $s->created_at,
             'service_price' => (int) ($s->service_price ?? $s->price ?? $s->amount),
             'expense'       => (int) ($s->expense ?? 0),
@@ -309,6 +341,7 @@ class ServiceController extends Controller
                     $payload = [
                         'customer_id' => $customerId,
                         'service_id'  => $svc->id,
+                        'user_id'     => $data['user_id'] ?? null,
                         'debt'      => $incomingDebt,
                         'date'      => $debtDate,
                         'note'        => $r->input('debt_note') ?: ('Nợ phát sinh từ dịch vụ #' . $svc->id),
