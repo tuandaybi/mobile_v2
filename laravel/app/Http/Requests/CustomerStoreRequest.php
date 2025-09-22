@@ -21,7 +21,7 @@ class CustomerStoreRequest extends FormRequest
         return [
             'name'        => ['required','string','max:255'],
             'phone'       => ['nullable','string','max:20',
-                Rule::unique('customer','phone')->where(fn($q)=>$q->where('store_id',$storeId))],
+                Rule::unique('customers','phone')->where(fn($q)=>$q->where('store_id',$storeId))],
             'social_link' => ['nullable','string','max:255'],
             'note'        => ['nullable','string'],
         ];

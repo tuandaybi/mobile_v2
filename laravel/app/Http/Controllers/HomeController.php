@@ -103,13 +103,13 @@ class HomeController extends Controller
             'total_revenue' => (float) DB::table($tblOut.' as mo')
                 ->join($tblIn.' as mi', 'mi.id', '=', 'mo.mobile_in_id')
                 ->where('mi.store_id', $storeId)
-                ->whereBetween('mo.created_at', [$startOfMonth, $endOfMonth]) // đổi cột nếu dùng export_date
+                ->whereBetween('mo.export_date', [$startOfMonth, $endOfMonth]) // đổi cột nếu dùng export_date
                 ->sum('mo.export_price'),
 
             'profit' => (float) DB::table($tblOut.' as mo')
                 ->join($tblIn.' as mi', 'mi.id', '=', 'mo.mobile_in_id')
                 ->where('mi.store_id', $storeId)
-                ->whereBetween('mo.created_at', [$startOfMonth, $endOfMonth])
+                ->whereBetween('mo.export_date', [$startOfMonth, $endOfMonth])
                 ->selectRaw('COALESCE(SUM(mo.export_price - mi.import_price - COALESCE(mo.expense,0)),0) as profit')
                 ->value('profit'),
 
@@ -117,7 +117,7 @@ class HomeController extends Controller
                 ->join($tblIn.' as mi', 'mi.id', '=', 'mo.mobile_in_id')
                 ->join($tblDev.' as d', 'd.id', '=', 'mi.device_id')
                 ->where('mi.store_id', $storeId)
-                ->whereBetween('mo.created_at', [$startOfMonth, $endOfMonth])
+                ->whereBetween('mo.export_date', [$startOfMonth, $endOfMonth])
                 ->groupBy('mi.device_id', 'd.name')
                 ->select([
                     'mi.device_id',

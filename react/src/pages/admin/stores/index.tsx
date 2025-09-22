@@ -153,7 +153,7 @@ export default function StoresPage() {
             <Tag color="blue">{record.users_count ?? users.length} NV</Tag>
             <Tooltip
               title={
-                <div style={{ maxWidth: 360 }}>
+                <div style={{ maxWidth: 450 }}>
                   {users.map((u) => (
                     <div key={u.id}>• {u.name} <small>({u.email})</small></div>
                   ))}

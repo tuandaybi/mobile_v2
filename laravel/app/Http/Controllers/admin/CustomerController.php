@@ -81,7 +81,7 @@ class CustomerController extends Controller
         $data = $r->validate([
             'name'        => ['sometimes','required','string','max:255'],
             'phone'       => ['sometimes','nullable','string','max:20',
-                Rule::unique('customer','phone')->ignore($c->id)->where(fn($q)=>$q->where('store_id',$storeId))],
+                Rule::unique('customers','phone')->ignore($c->id)->where(fn($q)=>$q->where('store_id',$storeId))],
             'social_link' => ['sometimes','nullable','string','max:255'],
             'debt'        => ['sometimes','nullable','numeric','min:0'],
             'note'        => ['sometimes','nullable','string'],
@@ -108,7 +108,6 @@ class CustomerController extends Controller
 
     public function indexAdmin(Request $r)
     {
-        $storeId = $this->resolveStoreId($r);
 
         $search  = trim((string) $r->query('search', $r->query('q', '')));
         $perPage = max(1, min((int) $r->query('perPage', 15), 200));
@@ -119,7 +118,6 @@ class CustomerController extends Controller
         $sortDir  = strtolower($r->query('sortDir')) === 'asc' ? 'asc' : 'desc';
 
         $q = Customer::query()
-            ->where('store_id', $storeId)
             ->select(['id','store_id','name','phone','social_link','created_at'])
             ->with(['store:id,name'])
 

@@ -1,0 +1,4 @@
+{
+  "api_url": "http://localhost:8000/api/autohotkey/check-device",
+  "bearer_token": "PUT_YOUR_TOKEN_HERE"
+}

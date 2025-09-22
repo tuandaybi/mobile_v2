@@ -353,7 +353,7 @@ export default function CustomersPage() {
         onOk={handleSave}
         onCancel={() => setIsModalOpen(false)}
         confirmLoading={saving}
-        destroyOnClose
+        destroyOnHidden
         afterOpenChange={(open) => {
           if (!open) return;
           const rec = editing;

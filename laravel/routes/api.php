@@ -63,7 +63,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/inbox/{id}/read', [InboxController::class, 'markRead']);
     Route::post('/inbox/read-all', [InboxController::class, 'readAll']); // optional
     Route::post('/inbox/{id}/comment', [InboxController::class, 'comment']);
-
+    Route::delete('/inbox/read', [InboxController::class, 'destroyRead']);
     // Purchase Invoices
     //Route::apiResource('purchase-invoices', PurchaseInvoiceController::class)->except(['create','edit']);
 

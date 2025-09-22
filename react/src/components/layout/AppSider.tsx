@@ -20,6 +20,7 @@ import {
   ShopOutlined,
   TeamOutlined,
   AccountBookOutlined,
+  NotificationOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -74,6 +75,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
         { key: '/admin/customers', icon: <TeamOutlined />, label: 'Quản lý khách hàng' },
         { key: '/admin/devices', icon: <AppstoreOutlined />, label: 'Quản lý sản phẩm' },
         { key: '/admin/colors', icon: <BgColorsOutlined />, label: 'Quản lý màu sản phẩm' },
+        { key: '/admin/notifications', icon: <NotificationOutlined />, label: 'Quản lý thông báo' },
         { key: '/admin/backups', icon: <DatabaseOutlined />, label: 'Quản lý sao lưu' },
         { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất' },
       ],

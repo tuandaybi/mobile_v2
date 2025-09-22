@@ -227,6 +227,7 @@ class MobileOutController extends Controller
     {
         // 1) Lấy đơn + quan hệ cần thiết để hiển thị
         $sale = MobileOut::with([
+            'mobileIn',
             'mobileIn.device',
             'mobileIn.color',
             'mobileIn.storage',
@@ -317,7 +318,7 @@ class MobileOutController extends Controller
     public function update(MobileOutUpdateRequest $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
-
+        $userId  = $r->user()->id;
         // Phiếu bán thuộc đúng store
         $sale = MobileOut::with([
             'mobileIn.device',
@@ -376,13 +377,13 @@ class MobileOutController extends Controller
 
         // ===== Chuẩn hoá debt (nếu có) =====
         $incomingDebt = null;
-        if ($r->has('debt')) {
-            $val = trim((string)$r->input('debt', ''));
+        if ($r->has('debt_amount')) {
+            $val = trim((string)$r->input('debt_amount', ''));
             $incomingDebt = $val === '' ? 0.0 : (float)preg_replace('/[^\d.-]/', '', $val);
             if ($incomingDebt < 0) $incomingDebt = 0.0;
         }
 
-        \DB::transaction(function () use ($r, $storeId, $sale, &$data, $incomingDebt) {
+        \DB::transaction(function () use ($r, $storeId, $userId, $sale, &$data, $incomingDebt) {
             // ===== CUSTOMER =====
             if ($r->filled('customer_id')) {
                 $customer = Customer::where('store_id', $storeId)
@@ -430,6 +431,7 @@ class MobileOutController extends Controller
                 $data['customer_id'] = $customer->id;
             }
 
+            
             // Ghi nhận user sửa
             if ($r->user()) $data['user_id'] = $r->user()->id;
 
@@ -459,6 +461,43 @@ class MobileOutController extends Controller
                     ]);
                 }
             }
+
+
+            //Tạo thông báo
+            $sale->refresh()->load([
+                'mobileIn.device',
+                'mobileIn.color',
+                'mobileIn.storage',
+                'customer',
+            ]);
+            $mob             = $sale->mobileIn;   
+            $deviceName      = optional(optional($mob)->device)->name ?? 'Thiết bị';
+            $imei         = optional($mob)->imei ?? '';
+            $customerName    = optional($sale->customer)->name ?? '';
+            $notiDebt = ($incomingDebt ?? 0) > 0
+                ? ' (nợ lại ' . number_format((float)$incomingDebt) . 'đ)'
+                : '';
+            $salePrice       = number_format((int) ($sale->export_price ?? 0)). "đ";
+
+            $noti = Notification::create([
+                'store_id'   => $storeId,
+                'created_by' => $userId,
+                'type'       => 'log',
+                'title'      => 'Thay đổi thông tin bán máy',
+                'body'       => "Đã bán {$deviceName} (IMEI: {$imei}) cho khách {$customerName} với giá {$salePrice} {$notiDebt}",
+                'ref_type'   => 'mobile_out',
+                'ref_id'     => $sale->id,
+                'priority'   => 'normal',
+            ]);
+
+            // Đính kèm recipients: toàn bộ user trong store
+            $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+            DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                'user_id' => $uid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $uids));
         });
 
         return new MobileOutResource(

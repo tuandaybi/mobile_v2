@@ -10,7 +10,7 @@ const AppFooter: React.FC = () => {
         textAlign: 'center',
       }}
     >
-      MyApp ©2025 - Laravel + React
+      Quản lý bán lẻ điện thoại & phụ kiện ©2025
     </Footer>
   );
 };

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\admin;
 use App\Http\Controllers\Controller;
 use App\Models\Store;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use App\Http\Controllers\Concerns\ResolvesStore;
@@ -18,19 +19,21 @@ class StoreController extends Controller
     public function index()
     {
         try {
-            $stores = Store::with(['users:id,name,email'])
+            // Stores + users_count + (tùy chọn) list users gọn nhẹ
+            $stores = Store::select('id', 'name', 'email', 'phone', 'address')
                 ->withCount('users')
-                ->orderBy('id','asc')
+                ->with([
+                    'users' => fn ($q) => $q->select('users.id', 'users.name', 'users.email')
+                ])
+                ->orderBy('id', 'asc')
                 ->get();
-
-            $allUsers = User::select('id','name','email')
-                ->orderBy('name')
-                ->get();
+            $users = User::select('id', 'name', 'email')->orderBy('id', 'asc')->get();
 
             return response()->json([
-                'stores' => $stores,
-                'users'  => $allUsers,
+                'stores' => $stores,   // mỗi store có: id, name, users_count, users:[{id,name,email}]
+                'users'  => $users,    // danh sách người dùng
             ], 200);
+
         } catch (\Throwable $e) {
             \Log::error('GET /admin/stores failed', [
                 'error' => $e->getMessage(),

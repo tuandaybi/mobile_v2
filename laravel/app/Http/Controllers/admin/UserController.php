@@ -15,13 +15,12 @@ class UserController extends Controller
 {
     public function index()
     {
-
         $users = User::with(['stores:id,name'])
             ->get();
 
         $roles = Role::pluck('name');
         $permissions = Permission::pluck('name');
-
+        $this->defaultRoleAndPermiss();
         return response()->json([
             'users'       => UsersResource::collection($users),
             'roles'       => $roles,
@@ -142,6 +141,7 @@ class UserController extends Controller
             'admin.saoluu',
             'admin.cuahang',
             'admin.khachhang',
+            'admin.thongbao'
         ];
 
         // Tạo/cập nhật permissions theo guard web
@@ -196,6 +196,17 @@ class UserController extends Controller
             'congno.them',
             'congno.sua',
             'checkimei.xem',
+        ]);
+
+        //API user
+        $roleApiUser = Role::findOrCreate('API User', $guard);
+        $roleApiUser->syncPermissions([
+            'dienthoai.themmua',
+            'dienthoai.themban',
+            'dichvu.them',
+            'checkimei.xem',
+            'admin.sanpham',
+            'admin.mausanpham',
         ]);
 
         return response()->json(['ok' => true]);

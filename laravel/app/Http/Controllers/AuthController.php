@@ -200,10 +200,29 @@ class AuthController extends Controller
             'license_expires_at' => $parsed['expires'],
         ])->save();
 
+        // Tạo thông báo.
+        $notiId = DB::table('notifications')->insertGetId([
+            'type'      => 'reminder',
+            'ref_type'  => 'license_renewed',
+            'title'     => 'Gia hạn thành công',
+            'body'      => 'Cảm ơn bạn đã gia hạn sử dụng sản phẩm. Hạn sử dụng mới của bạn là đến ngày '.$parsed['expires']->format('d/m/Y').'.',
+            'created_by'=> $user->id,
+            'created_at'=> now(),
+            'updated_at'=> now(),
+        ]);
+        DB::table('notification_recipients')->insert([
+            'notification_id' => $notiId,
+            'user_id'         => $user->id,
+            'read_at'         => null,
+            'created_at'      => now(),
+            'updated_at'      => now(),
+        ]);
+
         return response()->json([
             'message'            => 'Gia hạn thành công',
             'license_expires_at' => $parsed['expires']->toIso8601String(),
         ]);
+        
     }
 
     private function parseTokenKey(string $base64, string $secret): array

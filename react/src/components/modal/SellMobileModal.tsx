@@ -139,7 +139,7 @@ export default function SellMobileModal() {
           export_price:  toNumber(d.price ?? d.subtotal ?? initialValues.export_price ?? 0),
           expense:       toNumber(d.expense ?? initialValues.expense ?? 0),
           payment:       String(d.payment ?? initialValues.payment ?? '0') as Payment,
-          debt_amount: 0,
+          debt_amount:   toNumber(d.debt_amount ?? 0),
           export_date:   parseApiDateToDayjs(d.date) ?? initialValues.export_date ?? dayjs(),
           warranty:      toNumber(d.warranty ?? initialValues.warranty ?? 6),
           note:          d.note ?? initialValues.note ?? '',
@@ -377,14 +377,12 @@ export default function SellMobileModal() {
             />
           </Form.Item>
 
-          {!isEdit && (
             <Form.Item label="Nợ lại" name="debt_amount">
               <InputNumber min={0} style={{ width: '100%' }}
                 formatter={(v) => String(v ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
                 parser={parseNumber}
               />
             </Form.Item>
-          )}
 
           <Form.Item label="Bảo hành" name="warranty">
             <Select options={optionsWarranty} />

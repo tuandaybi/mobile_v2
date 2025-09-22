@@ -1,4 +1,4 @@
-import { Modal, Form, Input, Select, DatePicker, Button, InputNumber, AutoComplete, Spin, message } from 'antd';
+import { Modal, Form, Input, Select, DatePicker, Button, InputNumber, AutoComplete, message } from 'antd';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import dayjs, { Dayjs } from 'dayjs';
 import customParseFormat from 'dayjs/plugin/customParseFormat';
@@ -66,6 +66,9 @@ export default function ServiceModal() {
 
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
+
+  // input hiển thị trong AutoComplete (để value option unique mà input chỉ hiện tên)
+  const [customerInput, setCustomerInput] = useState<string>("");
 
   // customer search state
   const [optionsLoading, setOptionsLoading] = useState(false);
@@ -146,17 +149,23 @@ export default function ServiceModal() {
     }, 350) as unknown as number;
   };
 
-  const handleSelectName = (_value: string, option: any) => {
+const handleSelectName = (val: string, option: any) => {
+    // val: "Tên__#123"
+    const [name, idPart] = String(val).split('__#');
+    const id = idPart ? Number(idPart) : undefined;
+
+    setCustomerInput(name);
     setIsExistingCustomer(true);
     form.setFieldsValue({
-      customer_name: option.value,
-      customer_id: option.id ?? null,
-      phone_number: option.phone ?? '',
+      customer_name: name,
+      customer_id: id ?? null,
+      phone_number: option?.phone ?? '',
     });
   };
 
-  const handleChangeName = (val: string) => {
-    const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.trim().toLowerCase());
+  const handleChangeName = (text: string) => {
+    setCustomerInput(text);
+    const matched = suggestions.find(r => r.name.trim().toLowerCase() === text.trim().toLowerCase());
     if (matched) {
       setIsExistingCustomer(true);
       form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
@@ -167,21 +176,30 @@ export default function ServiceModal() {
   };
 
   const handleBlurName = () => {
-    const val = (form.getFieldValue('customer_name') || '').trim();
+    const val = customerInput.trim();
+    setCustomerInput(val);
     if (!val) {
       setIsExistingCustomer(false);
-      form.setFieldsValue({ customer_id: null, phone_number: '' });
+      form.setFieldsValue({ customer_id: null, phone_number: '' , customer_name: ''});
       return;
     }
     const matched = suggestions.find(r => r.name.trim().toLowerCase() === val.toLowerCase());
     if (matched) {
       setIsExistingCustomer(true);
-      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '' });
+      form.setFieldsValue({ customer_id: matched.id, phone_number: matched.phone ?? '', customer_name: val });
     } else {
       setIsExistingCustomer(false);
-      form.setFieldsValue({ customer_id: null });
+      form.setFieldsValue({ customer_id: null, customer_name: val });
     }
   };
+
+  const buildOptions = (list: CustomerRow[]) =>
+  list.map(s => ({
+    value: `${s.name}__#${s.id}`,
+    label: `${s.name}${s.phone ? ` • ${s.phone}` : ''}`,
+    id: s.id,
+    phone: s.phone,
+  }));
 
   // ===== Submit =====
   const handleSubmit = async (values: FormValues) => {
@@ -263,20 +281,16 @@ export default function ServiceModal() {
         >
           <AutoComplete
             placeholder="Nhập tên khách hàng"
+            value={customerInput}
             onSearch={handleSearchName}
             onSelect={handleSelectName}
             onChange={handleChangeName}
             onBlur={handleBlurName}
-            options={
-              suggestions.map(s => ({
-                value: s.name,
-                label: s.name,
-                id: s.id,
-                phone: s.phone,
-              })) as any[]
+            notFoundContent={optionsLoading ? 'Đang tải...' : suggestions.length === 0 ? 'Không tìm thấy' : null}
+            options={buildOptions(suggestions)}
+            filterOption={(input, option) =>
+              String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())
             }
-            notFoundContent={optionsLoading ? <div style={{ padding: 8 }}><Spin size="small" /></div> : null}
-            optionFilterProp="label"
           />
         </Form.Item>
 
