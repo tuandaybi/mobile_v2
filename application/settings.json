@@ -1,0 +1,14 @@
+﻿[
+  {
+    "setting_key":"http://tuanmobile.duckdns.org/api",
+    "setting_name":"Server_URL"
+  },
+  {
+    "setting_key":"C:\\Program Files\\Tesseract-OCR\\tesseract.exe",
+    "setting_name":"TesseractPath"
+  },
+  {
+    "setting_key":"1|qeEfiPCReEUF5aFmTW01uYMvJdUdNjLioR55tdqeb6633338",
+    "setting_name":"Token"
+  }
+]

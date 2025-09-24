@@ -297,7 +297,7 @@ const CheckProductPage: React.FC = () => {
               <Input
                 placeholder="Nhập đuôi IMEI, ví dụ: 8688"
                 value={imeiSearch}
-                onChange={(e) => setImeiSearch(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setImeiSearch(e.target.value)}
                 onPressEnter={() => handleSearch()}
               />
               <Button type="primary" onClick={() => handleSearch()} loading={loading}>
