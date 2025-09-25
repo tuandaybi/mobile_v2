@@ -649,7 +649,13 @@ CurlGetJson(method, endpoint, outputFile := "", query := "") {
     else{
         data := JSON.Parse(body)
         global mobile_in_id := 0
-        item := data[1]
+        try{
+            item := data[1]
+        }
+        catch{
+            MsgBox "❌ Không tìm thấy sản phẩm. Vui lòng kiểm tra lại IMEI."
+            return false
+        }
 
         device  := item["device"]["name"]
         storage := item["storage"]["name"]

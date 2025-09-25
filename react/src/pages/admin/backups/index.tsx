@@ -23,14 +23,13 @@ interface BackupRecord {
 }
 
 const BackupManager: React.FC = () => {
-  const [backupType, setBackupType] = useState("full");
+  const [backupType, setBackupType] = useState("db");
   const [backupList, setBackupList] = useState<BackupRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [deletingId, setDeletingId] = useState<number | null>(null);
   const [downloadingId, setDownloadingId] = useState<number | null>(null);
 
   const contentBackup = [
-    { value: "full", label: "Sao lưu code và database" },
     { value: "db", label: "Sao lưu database" },
   ];
 
