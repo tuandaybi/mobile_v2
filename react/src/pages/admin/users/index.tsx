@@ -349,7 +349,7 @@ export default function UsersPage() {
           onOk={handleSave}
           onCancel={() => setIsModalOpen(false)}
           confirmLoading={isModalLoading}
-          destroyOnClose
+          destroyOnHidden
         >
           <Form form={form} layout="vertical">
             <Form.Item
@@ -400,7 +400,7 @@ export default function UsersPage() {
           open={tokenModalOpen}
           onCancel={() => setTokenModalOpen(false)}
           footer={null}
-          destroyOnClose
+          destroyOnHidden
           width={720}
         >
           <Space style={{ width: '100%', marginBottom: 12 }} wrap>
