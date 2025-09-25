@@ -105,9 +105,9 @@ Route::middleware(['auth:sanctum'])
 
 // routes/web.php (khu admin, đã có auth + can)
 Route::prefix('admin/users')->middleware(['auth:sanctum'])->group(function () {
-    Route::get('{id}/tokens', [\App\Http\Controllers\Admin\UserTokenController::class, 'index']);
-    Route::post('{id}/tokens', [\App\Http\Controllers\Admin\UserTokenController::class, 'store']);
-    Route::delete('{id}/tokens/{tokenId}', [\App\Http\Controllers\Admin\UserTokenController::class, 'destroy']);
+    Route::get('{id}/tokens', [UserTokenController::class, 'index']);
+    Route::post('{id}/tokens', [UserTokenController::class, 'store']);
+    Route::delete('{id}/tokens/{tokenId}', [UserTokenController::class, 'destroy']);
 });
 
  
