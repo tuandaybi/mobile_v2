@@ -18,13 +18,14 @@ export default defineConfig({
     },
     proxy: {
       '/api': {
-        target: 'http://192.168.10.252:8080',
+        target: 'http://192.168.10.10:8080',
         changeOrigin: true,
         secure: false,
       },
     },
     allowedHosts: [
-      '0977769666.click', // thêm domain của mày
+      //'0977769666.click',
+      'localhost',
     ],
   },
 })

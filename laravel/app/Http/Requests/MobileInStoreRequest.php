@@ -13,7 +13,7 @@ class MobileInStoreRequest extends FormRequest
             'device_id'  => ['required','integer','exists:devices,id'],
             'color_id'   => ['required','integer','exists:colors,id'],
             'storage_id' => ['required','integer','exists:storages,id'],
-            'imei'       => ['required','string','max:32'],
+            'imei'       => ['required','string','max:17', 'regex:/^\d{15,17}$/'],
             'battery_capacity' => ['nullable','integer','between:0,100'],
             'country_code'     => ['nullable','string','max:10'],
             'supplier'         => ['nullable','string','max:191'], // ✅ varchar note
@@ -21,5 +21,12 @@ class MobileInStoreRequest extends FormRequest
             'import_date'      => ['required','date'],
             'import_note'      => ['nullable','string','max:500'],
         ];
+    }
+
+    protected function prepareForValidation(): void
+    {
+        $this->merge([
+            'imei' => (string) $this->input('imei'),
+        ]);
     }
 }

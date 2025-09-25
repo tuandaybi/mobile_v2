@@ -109,6 +109,7 @@ class UserController extends Controller
             'message' => 'Xóa user thành công'
         ], 201);
     }
+    
     public function defaultRoleAndPermiss()
     {
         $guard = 'web';

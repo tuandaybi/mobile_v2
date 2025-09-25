@@ -8,10 +8,12 @@ use App\Models\Notification;
 use App\Models\NotificationRecipient;
 use App\Models\NotificationComment;
 use App\Http\Controllers\Concerns\ResolvesStore;
+use Illuminate\Support\Facades\File;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Log;
 use Spatie\Permission\Models\Role;
 use App\Models\User;
-use Illuminate\Support\Facades\File;
 use Carbon\Carbon;
 use Illuminate\Support\Str;
 
@@ -295,24 +297,47 @@ class InboxController extends Controller
         ]);
     }
 
+    private function backupDisk(): string
+    {
+        // Lấy disk đầu tiên trong config backup (ví dụ: 'backups' hay 'local')
+        return config('backup.backup.destination.disks.0', 'local');
+    }
+
+    private function backupName(): string
+    {
+        // Tên thư mục con CHÍNH XÁC Spatie đang dùng (KHÔNG slug)
+        // fallback: app.name hoặc 'Laravel'
+        return config('backup.backup.name', config('app.name', 'Laravel'));
+    }
+
     private function ensureBackupReminderDaily($r): void
     {
         try {
             $storeId = $this->resolveStoreId($r);
             // 1) Lấy file backup mới nhất
-            $backupPath = storage_path('app/backup/' . Str::slug(config('app.name', 'Laravel')));
+            $disk = $this->backupDisk();
+            $name = $this->backupName();
+
             $latestFile = null;
 
-            if (File::exists($backupPath)) {
-                $latestFile = collect(File::files($backupPath))
-                    ->filter(fn($f) => $f->getExtension() === 'zip')
-                    ->sortByDesc(fn($f) => $f->getMTime())
-                    ->first();
-            }
+            // Lấy danh sách file từ disk thay vì File::files
+            $files = collect(Storage::disk($disk)->files("{$name}"))
+                ->filter(fn ($f) => str_ends_with($f, '.zip'))
+                ->map(function ($f) use ($disk) {
+                    return [
+                        'path' => $f,
+                        'timestamp' => Storage::disk($disk)->lastModified($f),
+                    ];
+                })
+                ->sortByDesc('timestamp');
 
-            $lastBackupAt = $latestFile
-                ? Carbon::createFromTimestamp($latestFile->getMTime())
-                : null;
+            if ($files->isNotEmpty()) {
+                $latest = $files->first();
+                $latestFile = $latest['path'];
+                $lastBackupAt = Carbon::createFromTimestamp($latest['timestamp']);
+            } else {
+                $lastBackupAt = null;
+            }
 
             // 2) Ngưỡng cảnh báo (ENV > config > default 7)
             $thresholdDays = (int) (config('backup.remind_days') ?? env('BACKUP_REMIND_DAYS', 7));

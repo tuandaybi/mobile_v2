@@ -1,6 +1,6 @@
 ﻿[
   {
-    "setting_key":"http://tuanmobile.duckdns.org/api",
+    "setting_key":"http://192.168.10.10:8080/api",
     "setting_name":"Server_URL"
   },
   {
@@ -8,7 +8,7 @@
     "setting_name":"TesseractPath"
   },
   {
-    "setting_key":"1|qeEfiPCReEUF5aFmTW01uYMvJdUdNjLioR55tdqeb6633338",
+    "setting_key":"40|7zudAe4vtKolk8bCxIDz90FqmD77jcNE1HIdWgHY4f132209",
     "setting_name":"Token"
   }
 ]

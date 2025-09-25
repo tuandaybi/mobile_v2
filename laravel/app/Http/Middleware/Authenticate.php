@@ -15,6 +15,6 @@ class Authenticate extends Middleware
             return null; // Trả JSON thay vì redirect
         }
 
-        abort(response()->json(['message' => 'Unauthenticated'], 401));
+        abort(response()->json(['message' => 'Không có quyền truy cập'], 401));
     }
 }

@@ -94,15 +94,13 @@ class ServiceController extends Controller
                 }
             }
 
-            $customer = Customer::where('store_id', $storeId)->where('name', $name)->first();
+            $customer = Customer::where('store_id', $storeId)->where('phone', $phone)->first();
             if (!$customer) {
                 $customer = (new Customer())->forceFill($attrs);
                 $customer->save();
-            } elseif ($phone) {
+            } else if ($phone) {
                 $needSave = false;
-                if (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone_number)) {
-                    $customer->phone_number = $phone; $needSave = true;
-                } elseif (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone)) {
+                if (Schema::hasColumn($customerTable, 'phone') && empty($customer->phone)) {
                     $customer->phone = $phone; $needSave = true;
                 }
                 if ($needSave) $customer->save();
