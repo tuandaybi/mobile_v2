@@ -362,7 +362,7 @@ const handleSelectName = (val: string, option: any) => {
           name="warranty"
           rules={[{ required: true, message: 'Vui lòng chọn bảo hành' }]}
         >
-          <Select options={warrantyOptions} />
+          <Select options={warrantyOptions} allowClear showSearch optionFilterProp="label" />
         </Form.Item>
 
         <Form.Item label="Ghi chú" name="note">
