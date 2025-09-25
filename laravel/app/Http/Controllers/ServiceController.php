@@ -366,8 +366,32 @@ class ServiceController extends Controller
     {
         $storeId = $this->resolveStoreId($r);
         $svc = Service::where('store_id',$storeId)->findOrFail($id);
-        $svc->delete();
-        return response()->json(['message'=>'Đã xoá.']);
+        
+        DB::transaction(function () use ($svc) {
+            // 1) Xoá công nợ liên quan nếu có
+            if (Schema::hasTable('debts')) {
+                // Tự dò cột liên kết đến mobile_out: ưu tiên mobileout_id > sale_id
+                $refCol = null;
+                if (Schema::hasColumn('debts', 'service_id')) {
+                    $refCol = 'service_id';
+                }
+
+                if ($refCol) {
+                    // Lấy tất cả debts liên quan
+                    $debtIds = DB::table('debts')->where($refCol, $svc->id)->pluck('id');
+                    if ($debtIds->isNotEmpty()) {
+                        // Xoá payments trước, rồi delete debts
+                        if (Schema::hasTable('debt_payments')) {
+                            DB::table('debt_payments')->whereIn('debt_id', $debtIds)->delete();
+                        }
+                        DB::table('debts')->whereIn('id', $debtIds)->delete();
+                    }
+                }
+            }
+            $svc->delete();
+        });
+
+        return response()->json(['message' => 'Đã xoá đơn bán và công nợ liên quan.']);
     }
 
     private function resolveStoreId(Request $r): int

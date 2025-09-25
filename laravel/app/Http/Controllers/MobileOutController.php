@@ -116,20 +116,16 @@ class MobileOutController extends Controller
             if ($phone) {
                 if (Schema::hasColumn('customers', 'phone')) {
                     $attrs['phone'] = $phone;
-                } elseif (Schema::hasColumn('customers', 'phone_number')) {
-                    $attrs['phone_number'] = $phone;
                 }
             }
 
-            $customer = Customer::where('store_id', $storeId)->where('name', $name)->first();
+            $customer = Customer::where('store_id', $storeId)->where('phone', $phone)->first();
             if (!$customer) {
                 $customer = (new Customer())->forceFill($attrs);
                 $customer->save();
             } elseif ($phone) {
                 $needSave = false;
-                if (Schema::hasColumn('customers', 'phone_number') && empty($customer->phone_number)) {
-                    $customer->phone_number = $phone; $needSave = true;
-                } elseif (Schema::hasColumn('customers', 'phone') && empty($customer->phone)) {
+                if (Schema::hasColumn('customers', 'phone') && empty($customer->phone)) {
                     $customer->phone = $phone; $needSave = true;
                 }
                 if ($needSave) $customer->save();
@@ -519,12 +515,10 @@ class MobileOutController extends Controller
         DB::transaction(function () use ($out) {
             // 1) Xoá công nợ liên quan nếu có
             if (Schema::hasTable('debts')) {
-                // Tự dò cột liên kết đến mobile_out: ưu tiên mobile_out_id > sale_id
+                // Tự dò cột liên kết đến mobile_out: ưu tiên mobileout_id > sale_id
                 $refCol = null;
-                if (Schema::hasColumn('debts', 'mobile_out_id')) {
-                    $refCol = 'mobile_out_id';
-                } elseif (Schema::hasColumn('debts', 'sale_id')) {
-                    $refCol = 'sale_id';
+                if (Schema::hasColumn('debts', 'mobileout_id')) {
+                    $refCol = 'mobileout_id';
                 }
 
                 if ($refCol) {

@@ -13,12 +13,13 @@ class ServiceStoreRequest extends FormRequest
     protected function prepareForValidation(): void
     {
         $rawPhone = (string) ($this->input('phone_number') ?? '');
+        $rawNote = (string) ($this->input('note') ?? '');
 
         $digits = preg_replace('/\D+/', '', $rawPhone);
 
         $this->merge([
             'phone_number' => $digits !== '' ? $digits : null,
-
+            'note'         => $rawNote !== '' ? $rawNote : null,
             'price'   => (int) preg_replace('/\D+/', '', (string) $this->input('price')   ?: 0),
             'expense' => (int) preg_replace('/\D+/', '', (string) $this->input('expense') ?: 0),
             'debt'    => (int) preg_replace('/\D+/', '', (string) $this->input('debt')    ?: 0),

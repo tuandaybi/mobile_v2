@@ -9,6 +9,7 @@ global input_mb_gianhap, input_mb_ngaynhap, input_mb_ghichunhap
 global input_id_device, input_id_color, input_id_capacity, input_mb_no, input_imei
 global input_tendichvu, input_dv_tenkh, input_dv_sdtkh, input_dv_giaban, input_dv_no, input_dv_ghichu, input_dv_chiphi, ddlBaohanh, input_dv_ngayban
 global input_Server, input_token, btnConnect
+global mobile_in_id := 0
 
 ;-----------------------------GUI-----------------------------
 
@@ -90,7 +91,6 @@ input_dv_ghichu := myGui.AddEdit("x" (marginX + labelW) " y" y - 5 " w" inputW "
 y += 145
 btnLuuDV := myGui.AddButton("x" (marginX + labelW) " y" y " w120", "💾 Lưu")
 btnLuuDV.OnEvent("Click", (*) => 
-    btnLuuDV.Enabled := false
     SendToAPI("service", "/services")
 )
 
@@ -113,7 +113,7 @@ input_imei := myGui.AddEdit("x" (marginX + labelW) " y" (y - 5) " w" 200)
 btnCheck := myGui.AddButton("x" (marginX + labelW + 215) " y" y - 5 " h28", "Kiểm Tra")
 
 btnCheck.OnEvent("Click", (*) => 
-    SendToAPI("check", "/autohotkey/check-device")
+    CurlGetJson("GET", "/mobile-in/search-imei/" . input_imei.Text . "?sold=0")
 )
 
 y += spaceY
@@ -169,7 +169,7 @@ input_mb_ghichuban := myGui.AddEdit("x" (marginX + labelW) " y" y - 5 " w" input
 y += spaceY + 65
 btnLuu := myGui.AddButton("x210 y" y " w100", "💾 Lưu")
 btnLuu.OnEvent("Click", (*) => 
-    SendToAPI("sell", "/services")
+    SendToAPI("sell", "/mobile-out")
 )
 btnLuu.Enabled := false
 
@@ -646,24 +646,43 @@ CurlGetJson(method, endpoint, outputFile := "", query := "") {
         MsgBox "❌ HTTP " httpStatus "`n" body
         return false
     }
+    else{
+        data := JSON.Parse(body)
+        global mobile_in_id := 0
+        item := data[1]
+
+        device  := item["device"]["name"]
+        storage := item["storage"]["name"]
+        color   := item["color"]["en_name"]
+        imei    := item["imei"]
+        mobile_in_id := item["id"]
+
+        msg := "Thông tin sản phẩm" "`n"
+        msg .= "ID: " mobile_in_id "`n"
+        msg .= "Tên: " device "`n"
+        msg .= "Dung lượng: " storage "`n"
+        msg .= "Màu sắc: " color "`n"
+        msg .= "IMEI: " imei
+        MsgBox(msg)
+        btnLuu.Enabled := true
+    }
 
     if (outputFile != "") {
         fo := FileOpen(outputFile, "w", "UTF-8")
         fo.Write(body), fo.Close()
     }
 
-    MsgBox (outputFile != "" ? "✅ Đã lưu: " outputFile : "✅ " method " thành công") . "`nHTTP " httpStatus
+    if (outputFile != "")
+    MsgBox "✅ Đã lưu: " outputFile
+
     return true
 }
+
 ;-----------------------------------------------API POST----------------------------------------------------------------------------
 
 SendToAPI(mode, endpoint) {
 	data := Map()
-		
-		if (mode = "check") {
-			data["input_imei"]       := input_imei.Value
-		}
-		
+			
 		if (mode = "add") {
 			d := ddlDevices.Text
 			c := ddlColors.Text
@@ -684,12 +703,30 @@ SendToAPI(mode, endpoint) {
 		}
 
 		if (mode = "sell") {
-			data["input_imei"]       := input_imei.Value
-			data["input_tenkh"]      := input_tenkh.Value
-			data["input_sdtkh"]      := "T" input_sdtkh.Text
-			data["input_giaban"]     := input_mb_giaban.Value
-			data["input_no"]     := input_mb_no.Value
-			data["input_ghichuban"]  := input_mb_ghichuban.Value . " - " . ddlBaohanh_May.Text
+
+            rbTienmat.MyValue     := 2
+            rbChuyenkhoan.MyValue := 0
+            rbTragop.MyValue      := 1
+
+            payment := (rbTienmat.Value ? rbTienmat.MyValue
+             : rbChuyenkhoan.Value ? rbChuyenkhoan.MyValue
+             : rbTragop.Value ? rbTragop.MyValue
+             : "")
+
+            bh := ddlBaohanh_May.Text
+
+            data := Map(
+			"mobile_in_id", mobile_in_id,
+			"customer_name", input_tenkh.Value,
+			"phone_number", "T" input_sdtkh.Text,
+			"export_price", RegExReplace(input_mb_giaban.Value, "[^\d]"),
+			"expense", RegExReplace(input_mb_chiphi.Value, "[^\d]"),
+			"debt_amount", RegExReplace(input_mb_no.Value, "[^\d]"),
+			"payment", RegExReplace(payment, "[^\d]"),
+			"export_date", input_mb_ngayban.Value,
+			"warranty", baohanh.map.Has(bh) ? baohanh.map[bh] : 0,
+			"note", input_mb_ghichuban.Value,
+            )
 		}
 		if (mode = "service") {
             bh := ddlBaohanh.Text
@@ -744,17 +781,18 @@ SendToAPI(mode, endpoint) {
             return false
         }
 
-		if (mode = "check") {
-
-		}
 		if (mode = "sell") {
             btnLuu.Enabled := false
             input_imei.Value := ""
             input_tenkh.Value := ""
             input_sdtkh.Text := ""
             input_mb_giaban.Value := ""
+            input_mb_chiphi.Value := ""
+            ddlBaohanh_May.Text := "Không bảo hành"
+            input_mb_ngayban.Value := FormatTime(A_Now, "yyyy-MM-dd")
             input_mb_no.Value := ""
             input_mb_ghichuban.Value := ""
+            MsgBox("Bán sản phẩm thành công")
 		}
 		if (mode = "add") {
             SaveNguonNhap()
@@ -765,13 +803,13 @@ SendToAPI(mode, endpoint) {
 			input_mb_pin.Value := ""
 			input_mb_mamay.Value := ""
 			ddlNguonnhap.Text := "Khách lẻ"
+            input_mb_ngaynhap.Value := FormatTime(A_Now, "yyyy-MM-dd")
 			input_mb_gianhap.Value := ""
 			input_mb_ghichunhap.Value := ""
             MsgBox("Thêm sản phẩm thành công")
 		}
         if (mode = "service") {
             XoaInput()
-            btnLuuDV.Enabled := false
             MsgBox("Thêm dịch vụ thành công")
         }
 	} else {
