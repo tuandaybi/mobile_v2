@@ -365,9 +365,10 @@ class ServiceController extends Controller
     public function destroy(Request $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
-        $svc = Service::where('store_id',$storeId)->findOrFail($id);
+        $svc = Service::with(['customer', 'user'])->where('store_id',$storeId)->findOrFail($id);
+        $userId  = $r->user()->id;
         
-        DB::transaction(function () use ($svc) {
+        DB::transaction(function () use ($svc, $userId, $storeId) {
             // 1) Xoá công nợ liên quan nếu có
             if (Schema::hasTable('debts')) {
                 // Tự dò cột liên kết đến mobile_out: ưu tiên mobileout_id > sale_id
@@ -388,6 +389,32 @@ class ServiceController extends Controller
                     }
                 }
             }
+            
+            //Tạo thông báo
+            $serviceName = $svc->name ?? '';
+            $customerName = optional($svc->customer)->name ?? '';
+            $salePrice = number_format((int) ($svc->price ?? 0)). "đ";
+
+            $noti = Notification::create([
+                'store_id'   => $storeId,
+                'created_by' => $userId,
+                'type'       => 'log',
+                'title'      => 'Xóa dịch vụ',
+                'body'       => "Xóa {$serviceName} của khách {$customerName} với giá {$salePrice} người bán #".optional($svc->user)->name,
+                'ref_type'   => 'service',
+                'ref_id'     => $svc->id,
+                'priority'   => 'normal',
+            ]);
+
+            // Đính kèm recipients: toàn bộ user trong store
+            $uids = DB::table('user_in_store')->where('store_id', $svc->store_id)->pluck('user_id')->all();
+            DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                'user_id' => $uid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $uids));
+
             $svc->delete();
         });
 

@@ -508,11 +508,15 @@ class MobileOutController extends Controller
         );
     }
 
-    public function destroy($id)
+    public function destroy(Request $r, $id)
     {
-        $out = MobileOut::with('mobileIn')->findOrFail($id);
+        $out = MobileOut::with('mobileIn', 'customer', 'user')->findOrFail($id);
+        $in = MobileIn::with('device', 'color', 'storage')->findOrFail($out->mobile_in_id);
 
-        DB::transaction(function () use ($out) {
+        $storeId = $this->resolveStoreId($r);
+        $userId  = $r->user()->id;
+
+        DB::transaction(function () use ($out, $in, $storeId, $userId) {
             // 1) Xoá công nợ liên quan nếu có
             if (Schema::hasTable('debts')) {
                 // Tự dò cột liên kết đến mobile_out: ưu tiên mobileout_id > sale_id
@@ -544,7 +548,34 @@ class MobileOutController extends Controller
                 DB::table('mobile_in')->where('id', $miId)->update($update);
             }
 
-            // 3) Xoá đơn bán
+            // 3) Tạo thông báo xoá đơn bán
+            $userSell        = $out->user->name ?? 'Người bán';
+            $deviceName      = optional(optional($in)->device)->name ?? 'Thiết bị';
+            $imei            = optional($in)->imei ?? '';
+            $customerName    = optional($out->customer)->name ?? '';
+            $salePrice       = number_format((int) ($out->export_price ?? 0)). "đ";
+
+            $noti = Notification::create([
+                'store_id'   => $storeId,
+                'created_by' => $userId,
+                'type'       => 'log',
+                'title'      => 'Xóa thông tin bán máy',
+                'body'       => "Đã xóa {$deviceName} (IMEI: {$imei}) cho khách {$customerName} với giá {$salePrice} người bán #{$userSell}",
+                'ref_type'   => 'mobile_out',
+                'ref_id'     => $out->id,
+                'priority'   => 'normal',
+            ]);
+
+            // Đính kèm recipients: toàn bộ user trong store
+            $uids = DB::table('user_in_store')->where('store_id', $storeId)->pluck('user_id')->all();
+            DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                'user_id' => $uid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $uids));
+
+            // 4) Xoá đơn bán
             $out->delete();
         });
 
