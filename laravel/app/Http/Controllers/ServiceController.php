@@ -232,9 +232,10 @@ class ServiceController extends Controller
     public function update(ServiceUpdateRequest $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
+        $userId  = $r->user()->id;
 
         // Service thuộc đúng store
-        $svc = Service::where('store_id', $storeId)->findOrFail($id);
+        $svc = Service::with(['customer', 'user'])->where('store_id', $storeId)->findOrFail($id);
 
         $data = $r->validated();
 
@@ -263,7 +264,7 @@ class ServiceController extends Controller
             if ($incomingDebt < 0) $incomingDebt = 0.0;
         }
 
-        DB::transaction(function () use ($r, $storeId, $svc, &$data, $incomingDebt) {
+        DB::transaction(function () use ($r, $storeId, $svc, &$data, $incomingDebt, $userId) {
             // ===== CUSTOMER =====
 
             if ($r->filled('customer_id')) {
@@ -351,6 +352,31 @@ class ServiceController extends Controller
                     Debt::where('service_id', $svc->id)->delete();
                 }
             }
+            //Tạo thông báo
+            $serviceName = $svc->name ?? '';
+            $customerName = optional($svc->customer)->name ?? '';
+            $salePrice = number_format((int) ($svc->price ?? 0)). "đ";
+
+            $noti = Notification::create([
+                'store_id'   => $storeId,
+                'created_by' => $userId,
+                'type'       => 'log',
+                'title'      => 'Sửa dịch vụ',
+                'body'       => "Sửa {$serviceName} của khách {$customerName} với giá {$salePrice} người bán #".optional($svc->user)->name,
+                'ref_type'   => 'service',
+                'ref_id'     => $svc->id,
+                'priority'   => 'normal',
+            ]);
+
+            // Đính kèm recipients: toàn bộ user trong store
+            $uids = DB::table('user_in_store')->where('store_id', $svc->store_id)->pluck('user_id')->all();
+            DB::table('notification_recipients')->insert(array_map(fn($uid)=>[
+                'notification_id' => $noti->id, // nếu cần id thông báo vừa tạo thì lấy từ $noti->id
+                'user_id' => $uid,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ], $uids));
+
         });
 
         return new ServiceResource(

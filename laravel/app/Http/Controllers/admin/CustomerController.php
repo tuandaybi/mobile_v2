@@ -18,32 +18,26 @@ class CustomerController extends Controller
         $q = Customer::query()->where('store_id', $storeId);
 
         $search = trim((string) $r->query('search', $r->query('q', ''))); // ưu tiên ?search=..., fallback ?q=...
-        $limit  = (int) $r->query('limit', 15);
-        $limit  = max(1, min($limit, 15)); // giới hạn an toàn
-
         $q = Customer::query()
-        ->where('store_id', $storeId)
-        ->when($search !== '', function ($w) use ($search) {
-            $like = "%{$search}%";
-            $w->where(function ($x) use ($like) {
-                $x->where('name',  'like', $like)
-                  ->orWhere('phone','like', $like);
+            ->where('store_id', $storeId)
+            ->when($search !== '', function ($w) use ($search) {
+                $like = "%{$search}%";
+                $w->where(function ($x) use ($like) {
+                    $x->where('name',  'like', $like)
+                    ->orWhere('phone','like', $like);
+                });
             });
-        })
-        ->orderByDesc('id')
-        ->limit($limit);
 
-        // --- sort ---
+        // sort
         $sortable = ['id','name','phone','created_at'];
         $sortBy  = in_array($r->input('sortBy'), $sortable, true) ? $r->input('sortBy') : 'id';
         $sortDir = strtolower($r->input('sortDir')) === 'asc' ? 'asc' : 'desc';
 
+        $q->orderBy($sortBy, $sortDir);
 
-        // --- paginate bình thường ---
+        // paginate
         $perPage = max(1, min((int) $r->input('perPage', 15), 200));
-        return response()->json(
-            $q->paginate($perPage)
-        );
+        return response()->json($q->paginate($perPage));
     }
 
     // POST /customers
@@ -118,7 +112,7 @@ class CustomerController extends Controller
         $sortDir  = strtolower($r->query('sortDir')) === 'asc' ? 'asc' : 'desc';
 
         $q = Customer::query()
-            ->select(['id','store_id','name','phone','social_link','created_at'])
+            ->select(['id','store_id','name','phone','social_link','note', 'created_at'])
             ->with(['store:id,name'])
 
             // --- Tổng chi tiêu (giữ nguyên như trước) ---
@@ -182,6 +176,7 @@ class CustomerController extends Controller
                     'service'   => $debt_service - $paid_service,
                     'total'     => $debt_mobileout + $debt_service - $paid_mobileout - $paid_service,
                 ],
+                'note'       => $c->note,
                 'created_at' => $c->created_at,
             ];
         });
