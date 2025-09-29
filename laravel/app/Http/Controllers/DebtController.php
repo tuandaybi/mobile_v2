@@ -13,11 +13,15 @@ use App\Http\Requests\Debt\StoreDebtRequest;
 use App\Http\Requests\Debt\UpdateDebtRequest;
 use App\Http\Requests\Debt\StoreDebtPaymentRequest;
 use App\Http\Requests\Debt\UpdateDebtPaymentRequest;
+use App\Http\Controllers\Concerns\ResolvesStore;
+use App\Notifications\TelegramNotification;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
+
 class DebtController extends Controller
 {
+    use ResolvesStore;
     protected function resolveStoreId(Request $r): int
     {
         return (int) DB::table('user_in_store')
@@ -328,6 +332,9 @@ class DebtController extends Controller
         ]);
         //Tạo thông báo
         $amount = number_format($amount). "đ";
+
+        TelegramNotification::send("Thu nợ:\n- {$amount}\nKhách: {$customerName}\nCửa hàng: ". $this->resolveStoreName($storeId));
+
         $noti = Notification::create([
             'store_id'   => $storeId,
             'created_by' => $userId,
@@ -414,12 +421,15 @@ class DebtController extends Controller
 
                 //Tạo thông báo
                 $amount = number_format((int) ($d->remaining ?? 0)). "đ";
+
+                TelegramNotification::send("Tất toán công nợ:\n- {$amount}\nKhách: {$customerName}\nCửa hàng: ". $this->resolveStoreName($storeId));
+
                 $noti = Notification::create([
                     'store_id'   => $storeId,
                     'created_by' => $userId,
                     'type'       => 'log',
                     'title'      => 'Thu nợ',
-                    'body'       => "Đã thu nợ {$amount} từ khách {$customerName}",
+                    'body'       => "Tất toán công nợ {$amount} từ khách {$customerName}",
                     'ref_type'   => 'debt',
                     'ref_id'     => $d->id,
                     'priority'   => 'normal',

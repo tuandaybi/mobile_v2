@@ -12,6 +12,7 @@ use App\Http\Requests\{MobileOutStoreRequest, MobileOutUpdateRequest};
 use App\Http\Resources\MobileOutResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Notifications\TelegramNotification;
 
 class MobileOutController extends Controller
 {
@@ -177,6 +178,14 @@ class MobileOutController extends Controller
         $customerName = optional($sale->customer)->name ?? '';
         $salePrice = number_format((int) ($sale->export_price ?? 0)). "đ";
 
+        $statusMap = [
+            0 => 'chuyển khoản',
+            1 => 'trả góp',
+            2 => 'tiền mặt',
+        ];
+
+        TelegramNotification::send("Đã bán máy:\n- {$deviceName}\nIMEI: {$mob->imei}\nKhách: {$customerName}\nGiá: {$salePrice} {$notiDebt}\nHình thức thanh toán: {$statusMap[$sale->payment]}\nCửa hàng: ". $this->resolveStoreName($storeId));
+
         $noti = Notification::create([
             'store_id'   => $storeId,
             'created_by' => $userId,
@@ -199,6 +208,8 @@ class MobileOutController extends Controller
 
             return [$sale, $createdDebt];
         });
+
+        
 
         // Trả về: hoá đơn bán + (tuỳ chọn) debt vừa tạo
         return (new MobileOutResource(
@@ -475,6 +486,8 @@ class MobileOutController extends Controller
                 : '';
             $salePrice       = number_format((int) ($sale->export_price ?? 0)). "đ";
 
+            TelegramNotification::send("Cập nhật phiếu bán máy #{$sale->id}:\n- {$deviceName}\nIMEI: {$imei}\nKhách: {$customerName}\nGiá: {$salePrice} {$notiDebt}\nCửa hàng: ". $this->resolveStoreName($storeId));
+
             $noti = Notification::create([
                 'store_id'   => $storeId,
                 'created_by' => $userId,
@@ -554,6 +567,8 @@ class MobileOutController extends Controller
             $imei            = optional($in)->imei ?? '';
             $customerName    = optional($out->customer)->name ?? '';
             $salePrice       = number_format((int) ($out->export_price ?? 0)). "đ";
+
+            TelegramNotification::send("Đã xoá phiếu bán máy #{$out->id}:\n- {$deviceName}\nIMEI: {$imei}\nKhách: {$customerName}\nGiá: {$salePrice} người bán #{$userSell}\nCửa hàng: ". $this->resolveStoreName($storeId));
 
             $noti = Notification::create([
                 'store_id'   => $storeId,

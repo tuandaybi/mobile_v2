@@ -2,6 +2,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Controllers\Concerns\ResolvesStore;
+use App\Notifications\TelegramNotification;
 use App\Models\Service;
 use Illuminate\Http\Request;
 use App\Http\Requests\{ServiceStoreRequest, ServiceUpdateRequest};
@@ -165,6 +166,8 @@ class ServiceController extends Controller
             $customerName = optional($service->customer)->name ?? '';
             $salePrice = number_format((int) ($service->price ?? 0)). "đ";
             $notiDebt = $debtToAdd > 0 ? " (nợ lại ". number_format((float)$debtToAdd)."đ)" : '';
+
+            TelegramNotification::send("Tạo dịch vụ:\n- {$serviceName}\nKhách: {$customerName}\nGiá: {$salePrice}{$notiDebt}\nCửa hàng: ". $this->resolveStoreName($service->store_id));
 
             $noti = Notification::create([
                 'store_id'   => $service->store_id,
@@ -356,6 +359,8 @@ class ServiceController extends Controller
             $serviceName = $svc->name ?? '';
             $customerName = optional($svc->customer)->name ?? '';
             $salePrice = number_format((int) ($svc->price ?? 0)). "đ";
+            
+            TelegramNotification::send("Sửa dịch vụ:\n- {$serviceName}\nKhách: {$customerName}\nGiá: {$salePrice}\nCửa hàng: ". $this->resolveStoreName($svc->store_id));
 
             $noti = Notification::create([
                 'store_id'   => $storeId,
@@ -420,6 +425,8 @@ class ServiceController extends Controller
             $serviceName = $svc->name ?? '';
             $customerName = optional($svc->customer)->name ?? '';
             $salePrice = number_format((int) ($svc->price ?? 0)). "đ";
+
+            TelegramNotification::send("Xoá dịch vụ:\n- {$serviceName}\nKhách: {$customerName}\nGiá: {$salePrice} người bán #".optional($svc->user)->name."\nCửa hàng: ". $this->resolveStoreName($svc->store_id));
 
             $noti = Notification::create([
                 'store_id'   => $storeId,

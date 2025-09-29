@@ -50,6 +50,15 @@ trait ResolvesStore
         return $storeIds[0];
     }
 
+    protected function resolveStoreName($storeId)
+    {
+        if (empty($storeId)) {
+            return null;
+        }
+        $store = DB::table('stores')->select('name')->where('id', $storeId)->first();
+        return $store->name ?? null;
+    }
+
     private function resolveStoreIdByUserId(int $userId): ?int
     {
         if (\Schema::hasColumn('user_in_store', 'user_id') && \Schema::hasColumn('user_in_store', 'store_id')) {

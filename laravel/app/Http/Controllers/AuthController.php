@@ -15,6 +15,8 @@ use Illuminate\Support\Facades\Validator;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use App\Http\Controllers\Concerns\ResolvesStore;
+use App\Notifications\TelegramNotification;
+use Illuminate\Support\Facades\Notification;
 
 class AuthController extends Controller
 {
@@ -88,6 +90,8 @@ class AuthController extends Controller
         $storeId = $this->resolveStoreIdByUserId($user->id);
         $store = DB::table('stores')->select('id','name')->where('id', $storeId)->first();
         $store_name = $store->name ?? null;
+
+        TelegramNotification::send("Người dùng đăng nhập:\n- {$user->name}\n- {$user->email}\n- Store: ".($store_name ?? 'N/A')."\n- IP: ".$request->ip()."\n- User-Agent: ".$request->userAgent());
 
         $userPayload = (new AuthUserResource($user))
         ->withToken($plainToken)
@@ -179,7 +183,7 @@ class AuthController extends Controller
         $req->validate(['code' => 'required|string']);
         $secret = config('app.renew_secret') ?? '';
         if ($secret === '') {
-            return response()->json(['message' => 'Server chưa cấu hình renew_secret'], 500);
+            return response()->json(['message' => 'Server chưa cấu hình'], 500);
         }
 
         try {
@@ -217,6 +221,8 @@ class AuthController extends Controller
             'created_at'      => now(),
             'updated_at'      => now(),
         ]);
+
+        TelegramNotification::send("Người dùng gia hạn thành công:\n- {$user->name}\n- {$user->email}\n- Hạn mới: ".$parsed['expires']->toIso8601String()."\n- IP: ".$req->ip()."\n- User-Agent: ".$req->userAgent());
 
         return response()->json([
             'message'            => 'Gia hạn thành công',

@@ -11,6 +11,7 @@ use App\Http\Controllers\Traits\IndexHelpers;
 use App\Http\Resources\MobileInResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use App\Notifications\TelegramNotification;
 
 class MobileInController extends Controller
 {
@@ -162,6 +163,8 @@ class MobileInController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ], $uids));
+        // Gửi Telegram
+        TelegramNotification::send("Nhập máy:\n {$deviceName} {$deviceCountryCode} {$deviceStorage} {$deviceColor} \n(IMEI: {$mob->imei}) \nbởi {$user->name} \nvào cửa hàng {$mob->store->name} ({$storeId}) \nvới giá ".number_format($mob->import_price)."đ");
 
         return (new MobileInResource($mob))->response()->setStatusCode(201);
     }
@@ -191,6 +194,7 @@ class MobileInController extends Controller
         }
 
         $mob->update($data);
+        TelegramNotification::send("Cập nhật máy nhập:\n {$mob->device->name} {$mob->country_code} {$mob->storage->name} {$mob->color->en_name} \nIMEI: {$mob->imei} \nGiá tiền: ".number_format($mob->import_price)."đ \nbởi {$user->name} \nvào cửa hàng {$mob->store->name} ({$mob->store_id})");
 
         return new MobileInResource(
             $mob->load(['device','color','storage','store','user','mobileOut'])
@@ -211,6 +215,8 @@ class MobileInController extends Controller
         if ($mob->is_sold || $mob->mobileOut) {
             return response()->json(['message'=>'Không thể xoá vì máy đã được bán hoặc có bản ghi liên kết.'], 409);
         }
+
+        TelegramNotification::send("Xoá máy:\n {$mob->device->name} {$mob->country_code} {$mob->storage->name} {$mob->color->en_name} \nIMEI: {$mob->imei} \nGiá tiền: ".number_format($mob->import_price)."đ \nbởi {$user->name} \nvào cửa hàng {$mob->store->name} ({$mob->store_id})");
 
         $mob->delete();
         return response()->json(['message'=>'Đã xoá thành công.']);
