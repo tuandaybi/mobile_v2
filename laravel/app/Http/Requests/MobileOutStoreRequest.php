@@ -29,7 +29,7 @@ class MobileOutStoreRequest extends FormRequest
             'mobile_in_id'   => ['required','exists:mobile_in,id'],
             'customer_id'    => ['nullable','exists:customers,id'],
             'customer_name'  => ['required_without:customer_id','string','max:255'],
-            'phone_number'   => ['required_without:customer_id','nullable','string','max:20'],
+            'phone_number'   => ['required_without:customer_id','nullable','string','min:10','max:20'],
             'export_price'   => ['required','numeric','min:0'],
             'expense'        => ['required','numeric','min:0'],
             'debt_amount'    => ['nullable','numeric','min:0'],

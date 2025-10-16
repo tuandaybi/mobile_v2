@@ -34,7 +34,7 @@ class ServiceStoreRequest extends FormRequest
             'name'          => ['required','string','max:255'],
             'customer_id'   => ['nullable','integer','exists:customers,id'],
             'customer_name' => ['required_without:customer_id','string','max:255'],
-            'phone_number'  => ['required_without:customer_id','string','max:20'],
+            'phone_number'  => ['required_without:customer_id','string','min:10','max:20'],
             'price'         => ['required','integer','min:0'],
             'expense'       => ['required','integer','min:0'],
             'debt'          => ['nullable','integer','min:0'],

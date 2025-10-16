@@ -147,7 +147,6 @@ export default function CustomersPage() {
       // index() của bạn trả kiểu Resource paginate => { data, meta }
       const res = await api.get("admin/ad-customers", { params });
       const payload = res.data;
-      console.log("data customner", res);
 
       const list: any[] = Array.isArray(payload?.data)
         ? payload.data
