@@ -1,6 +1,7 @@
 import React, { Suspense, lazy } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import ProtectedRoute from '@/router/ProtectedRoute';
+import ZaloCallback from "@/components/zalo/ZaloCallback";
 
 const LoginPage = lazy(() => import('@/pages/auth/LoginPage'));
 const RegisterPage = lazy(() => import('@/pages/auth/RegisterPage'));
@@ -33,6 +34,8 @@ const Router: React.FC = () => {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/dangky" element={<RegisterPage />} />
           <Route path="/giahan" element={<RenewPage />} />
+
+          <Route path="/zalo/callback" element={<ZaloCallback />} />
 
           <Route path="/home" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/mobiles" element={<ProtectedRoute><Mobiles /></ProtectedRoute>} />
