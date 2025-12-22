@@ -1,22 +1,22 @@
 import { useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import axios from "../../../axiosConfig";
 
 export default function ZaloCallback() {
-  const [params] = useSearchParams();
-
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
     const code = params.get("code");
     const state = params.get("state");
+    const verifier = localStorage.getItem("zalo_code_verifier");
 
-    console.log("Zalo code:", code);
-    console.log("State:", state);
+    if (!code || !verifier) return;
 
-    // TODO: gửi code về backend để đổi access_token
+    axios.post("/api/zalo/oauth", {
+      code,
+      code_verifier: verifier,
+    }).then(res => {
+      console.log("LOGIN OK", res.data);
+    });
   }, []);
 
-  return (
-    <div style={{ padding: 20 }}>
-      <h3>Đang xử lý đăng nhập Zalo...</h3>
-    </div>
-  );
+  return <div>Đang xử lý đăng nhập Zalo...</div>;
 }
