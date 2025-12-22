@@ -3,7 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     MobileInController, MobileOutController, PurchaseInvoiceController, 
     ServiceController, AuthController, DebtController, HomeController,
-    ReportController, InboxController
+    ReportController, InboxController, ZaloWebhookController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -17,6 +17,10 @@ Route::post('/login', [AuthController::class, 'login']);
 Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:10,1');
 Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth:sanctum');
+
+//Zalo Webhook
+Route::post('/zalo/webhook', [ZaloWebhookController::class, 'handle']);
+
 Route::middleware('auth:sanctum')->group(function () {
     // Profile
     Route::get('/user', [AuthController::class, 'index']);
