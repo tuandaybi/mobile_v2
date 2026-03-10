@@ -63,7 +63,7 @@ class AppUpdateController extends Controller
             'version' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'mandatory' => ['nullable', 'boolean'],
-            'file' => ['required', 'file', 'mimetypes:application/x-msdownload,application/octet-stream', 'max:204800'],
+            'file' => ['required', 'file', 'mimes:exe', 'max:204800'],
         ]);
 
         $appSlug = $this->sanitizeAppSlug($validated['app_slug']);
