@@ -12,10 +12,18 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 5173,
+
+    hmr: {
+      host: '0977769666.click',
+      protocol: 'wss',
+      clientPort: 443
+    },
+
     watch: {
       usePolling: true,
-      interval: 100 
+      interval: 100
     },
+
     proxy: {
       '/api': {
         target: 'http://192.168.10.10:8080',
@@ -23,6 +31,7 @@ export default defineConfig({
         secure: false,
       },
     },
+
     allowedHosts: [
       '0977769666.click',
       'localhost',

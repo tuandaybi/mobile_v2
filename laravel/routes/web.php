@@ -8,3 +8,4 @@ Route::get('/', function () {
 });
 
 Route::get('/app-updates', [AppUpdateController::class, 'dashboard'])->name('app-updates.dashboard');
+Route::get('/uploader', [AppUpdateController::class, 'dashboard'])->name('app-updates.uploader');

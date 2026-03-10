@@ -15,44 +15,17 @@ class AppUpdateController extends Controller
 
     public function dashboard(): View
     {
-        $releases = collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
-            ->filter(fn (string $path) => Str::endsWith($path, '/latest.json'))
-            ->map(function (string $path) {
-                $payload = json_decode(Storage::disk('public')->get($path), true);
-
-                if (!is_array($payload) || !isset($payload['app_slug'], $payload['version'], $payload['file_path'])) {
-                    return null;
-                }
-
-                $appSlug = $payload['app_slug'];
-                $channel = $payload['channel'] ?? self::DEFAULT_CHANNEL;
-                $filename = basename($payload['file_path']);
-
-                return [
-                    'app_slug' => $appSlug,
-                    'channel' => $channel,
-                    'version' => $payload['version'],
-                    'notes' => $payload['notes'] ?? '',
-                    'mandatory' => (bool) ($payload['mandatory'] ?? false),
-                    'size' => (int) ($payload['size'] ?? 0),
-                    'sha256' => $payload['sha256'] ?? null,
-                    'published_at' => $payload['published_at'] ?? null,
-                    'latest_url' => $channel === self::DEFAULT_CHANNEL
-                        ? route('app-updates.latest.default', ['appSlug' => $appSlug])
-                        : route('app-updates.latest', ['appSlug' => $appSlug, 'channel' => $channel]),
-                    'download_url' => route('app-updates.download', [
-                        'appSlug' => $appSlug,
-                        'channel' => $channel,
-                        'filename' => $filename,
-                    ]),
-                ];
-            })
-            ->filter()
-            ->sortByDesc('published_at')
-            ->values();
-
         return view('app-updates.dashboard', [
-            'releases' => $releases,
+            'listUrl' => route('admin.app-updates.index'),
+            'publishUrl' => route('admin.app-updates.publish'),
+            'loginUrl' => url('/api/login'),
+        ]);
+    }
+
+    public function index(): JsonResponse
+    {
+        return response()->json([
+            'releases' => $this->releaseCollection()->values(),
         ]);
     }
 
@@ -140,13 +113,28 @@ class AppUpdateController extends Controller
 
         return response()->json([
             'message' => 'Da phat hanh ban cap nhat moi.',
-            'release' => $meta,
+            'release' => $this->normalizeRelease($meta),
             'download_url' => route('app-updates.download', [
                 'appSlug' => $appSlug,
                 'channel' => $channel,
                 'filename' => basename($path),
             ]),
         ], 201);
+    }
+
+    public function destroy(string $appSlug, string $channel): JsonResponse
+    {
+        $appSlug = $this->sanitizeSegment($appSlug, 'app_slug');
+        $channel = $this->sanitizeSegment($channel, 'channel');
+        $channelDir = self::ROOT_DIR . '/' . $appSlug . '/' . $channel;
+
+        abort_unless(Storage::disk('public')->exists($channelDir), 404, 'Khong tim thay release de xoa.');
+
+        Storage::disk('public')->deleteDirectory($channelDir);
+
+        return response()->json([
+            'message' => 'Da xoa release va cac file lien quan.',
+        ]);
     }
 
     public function download(string $appSlug, string $channel, string $filename)
@@ -160,6 +148,55 @@ class AppUpdateController extends Controller
         return Storage::disk('public')->download($path, basename($filename), [
             'Content-Type' => 'application/octet-stream',
         ]);
+    }
+
+    private function releaseCollection()
+    {
+        return collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
+            ->filter(fn (string $path) => Str::endsWith($path, '/latest.json'))
+            ->map(function (string $path) {
+                $payload = json_decode(Storage::disk('public')->get($path), true);
+
+                if (!is_array($payload) || !isset($payload['app_slug'], $payload['version'], $payload['file_path'])) {
+                    return null;
+                }
+
+                return $this->normalizeRelease($payload);
+            })
+            ->filter()
+            ->sortByDesc('published_at');
+    }
+
+    private function normalizeRelease(array $payload): array
+    {
+        $appSlug = $payload['app_slug'];
+        $channel = $payload['channel'] ?? self::DEFAULT_CHANNEL;
+        $filename = basename($payload['file_path']);
+
+        return [
+            'app_slug' => $appSlug,
+            'channel' => $channel,
+            'version' => $payload['version'],
+            'notes' => $payload['notes'] ?? '',
+            'mandatory' => (bool) ($payload['mandatory'] ?? false),
+            'size' => (int) ($payload['size'] ?? 0),
+            'sha256' => $payload['sha256'] ?? null,
+            'published_at' => $payload['published_at'] ?? null,
+            'file_path' => $payload['file_path'],
+            'filename' => $filename,
+            'latest_url' => $channel === self::DEFAULT_CHANNEL
+                ? route('app-updates.latest.default', ['appSlug' => $appSlug])
+                : route('app-updates.latest', ['appSlug' => $appSlug, 'channel' => $channel]),
+            'download_url' => route('app-updates.download', [
+                'appSlug' => $appSlug,
+                'channel' => $channel,
+                'filename' => $filename,
+            ]),
+            'delete_url' => route('admin.app-updates.destroy', [
+                'appSlug' => $appSlug,
+                'channel' => $channel,
+            ]),
+        ];
     }
 
     private function resolveAppSlug(Request $request, ?string $appSlug): string
