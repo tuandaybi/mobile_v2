@@ -24,7 +24,7 @@ export default defineConfig({
       },
     },
     allowedHosts: [
-      //'0977769666.click',
+      '0977769666.click',
       'localhost',
     ],
   },
