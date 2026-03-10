@@ -22,8 +22,9 @@ Route::get('/home', [HomeController::class, 'index'])->middleware('auth:sanctum'
 Route::post('/zalo/webhook', [ZaloWebhookController::class, 'handle']);
 
 Route::get('/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
-Route::get('/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
-Route::get('/app-updates/{appSlug}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
+Route::get('/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
+Route::get('/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
+Route::get('/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
 
 Route::middleware('auth:sanctum')->group(function () {
     // Profile

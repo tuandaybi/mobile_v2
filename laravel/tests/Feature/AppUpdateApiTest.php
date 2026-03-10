@@ -18,33 +18,21 @@ class AppUpdateApiTest extends TestCase
             ->assertJsonPath('message', 'Chua co ban cap nhat nao duoc phat hanh.');
     }
 
-    public function test_latest_and_download_are_scoped_per_app_slug(): void
+    public function test_default_channel_latest_and_download_are_scoped_per_app_slug(): void
     {
         Storage::fake('public');
 
         $binary = 'dummy exe content';
-        Storage::disk('public')->put('app-updates/desktop-pos/releases/desktop-pos-v1.exe', $binary);
-        Storage::disk('public')->put('app-updates/desktop-crm/releases/desktop-crm-v2.exe', 'other binary');
-
-        Storage::disk('public')->put('app-updates/desktop-pos/latest.json', json_encode([
+        Storage::disk('public')->put('app-updates/desktop-pos/app/releases/desktop-pos-app-v1.exe', $binary);
+        Storage::disk('public')->put('app-updates/desktop-pos/app/latest.json', json_encode([
             'app_slug' => 'desktop-pos',
+            'channel' => 'app',
             'version' => '1.2.0',
             'notes' => 'Bug fixes',
             'mandatory' => true,
-            'file_path' => 'app-updates/desktop-pos/releases/desktop-pos-v1.exe',
+            'file_path' => 'app-updates/desktop-pos/app/releases/desktop-pos-app-v1.exe',
             'size' => strlen($binary),
             'sha256' => hash('sha256', $binary),
-            'published_at' => now()->toIso8601String(),
-        ]));
-
-        Storage::disk('public')->put('app-updates/desktop-crm/latest.json', json_encode([
-            'app_slug' => 'desktop-crm',
-            'version' => '9.9.9',
-            'notes' => 'Different app',
-            'mandatory' => false,
-            'file_path' => 'app-updates/desktop-crm/releases/desktop-crm-v2.exe',
-            'size' => strlen('other binary'),
-            'sha256' => hash('sha256', 'other binary'),
             'published_at' => now()->toIso8601String(),
         ]));
 
@@ -53,42 +41,96 @@ class AppUpdateApiTest extends TestCase
         $latest
             ->assertOk()
             ->assertJsonPath('app_slug', 'desktop-pos')
+            ->assertJsonPath('channel', 'app')
             ->assertJsonPath('has_update', true)
             ->assertJsonPath('latest.version', '1.2.0')
             ->assertJsonPath(
                 'latest.download_url',
-                route('app-updates.download', ['appSlug' => 'desktop-pos', 'filename' => 'desktop-pos-v1.exe'])
+                route('app-updates.download', [
+                    'appSlug' => 'desktop-pos',
+                    'channel' => 'app',
+                    'filename' => 'desktop-pos-app-v1.exe',
+                ])
             );
 
-        $download = $this->get('/api/app-updates/desktop-pos/download/desktop-pos-v1.exe');
+        $download = $this->get('/api/app-updates/desktop-pos/app/download/desktop-pos-app-v1.exe');
 
         $download
             ->assertOk()
             ->assertHeader('content-type', 'application/octet-stream');
     }
 
-    public function test_legacy_latest_endpoint_accepts_app_slug_query_param(): void
+    public function test_custom_channel_latest_is_independent_from_default_channel(): void
+    {
+        Storage::fake('public');
+
+        Storage::disk('public')->put('app-updates/tiktok-bot/app/releases/tiktok-bot-app-v1.exe', 'app binary');
+        Storage::disk('public')->put('app-updates/tiktok-bot/app/latest.json', json_encode([
+            'app_slug' => 'tiktok-bot',
+            'channel' => 'app',
+            'version' => '1.0.0',
+            'notes' => 'Desktop shell',
+            'mandatory' => false,
+            'file_path' => 'app-updates/tiktok-bot/app/releases/tiktok-bot-app-v1.exe',
+            'size' => strlen('app binary'),
+            'sha256' => hash('sha256', 'app binary'),
+            'published_at' => now()->toIso8601String(),
+        ]));
+
+        Storage::disk('public')->put('app-updates/tiktok-bot/bot-server/releases/tiktok-bot-bot-server-v2.exe', 'server binary');
+        Storage::disk('public')->put('app-updates/tiktok-bot/bot-server/latest.json', json_encode([
+            'app_slug' => 'tiktok-bot',
+            'channel' => 'bot-server',
+            'version' => '2.0.0',
+            'notes' => 'Worker process',
+            'mandatory' => true,
+            'file_path' => 'app-updates/tiktok-bot/bot-server/releases/tiktok-bot-bot-server-v2.exe',
+            'size' => strlen('server binary'),
+            'sha256' => hash('sha256', 'server binary'),
+            'published_at' => now()->toIso8601String(),
+        ]));
+
+        $response = $this->getJson('/api/app-updates/tiktok-bot/bot-server/latest?current_version=1.0.0');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('app_slug', 'tiktok-bot')
+            ->assertJsonPath('channel', 'bot-server')
+            ->assertJsonPath('latest.version', '2.0.0')
+            ->assertJsonPath(
+                'latest.download_url',
+                route('app-updates.download', [
+                    'appSlug' => 'tiktok-bot',
+                    'channel' => 'bot-server',
+                    'filename' => 'tiktok-bot-bot-server-v2.exe',
+                ])
+            );
+    }
+
+    public function test_legacy_latest_endpoint_accepts_app_slug_and_channel_query_params(): void
     {
         Storage::fake('public');
 
         $binary = 'dummy exe content';
-        Storage::disk('public')->put('app-updates/desktop-pos/releases/desktop-pos-v1.exe', $binary);
-        Storage::disk('public')->put('app-updates/desktop-pos/latest.json', json_encode([
+        Storage::disk('public')->put('app-updates/desktop-pos/bot-server/releases/desktop-pos-bot-server-v1.exe', $binary);
+        Storage::disk('public')->put('app-updates/desktop-pos/bot-server/latest.json', json_encode([
             'app_slug' => 'desktop-pos',
+            'channel' => 'bot-server',
             'version' => '1.2.0',
-            'notes' => 'Bug fixes',
+            'notes' => 'Bot worker',
             'mandatory' => false,
-            'file_path' => 'app-updates/desktop-pos/releases/desktop-pos-v1.exe',
+            'file_path' => 'app-updates/desktop-pos/bot-server/releases/desktop-pos-bot-server-v1.exe',
             'size' => strlen($binary),
             'sha256' => hash('sha256', $binary),
             'published_at' => now()->toIso8601String(),
         ]));
 
-        $response = $this->getJson('/api/app-updates/latest?app_slug=desktop-pos&current_version=1.0.0');
+        $response = $this->getJson('/api/app-updates/latest?app_slug=desktop-pos&channel=bot-server&current_version=1.0.0');
 
         $response
             ->assertOk()
             ->assertJsonPath('app_slug', 'desktop-pos')
+            ->assertJsonPath('channel', 'bot-server')
             ->assertJsonPath('latest.version', '1.2.0');
     }
 }
