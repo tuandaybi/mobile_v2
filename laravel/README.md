@@ -59,3 +59,22 @@ If you discover a security vulnerability within Laravel, please send an e-mail t
 ## License
 
 The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+
+## App update API (app.exe)
+
+Server đã có sẵn API để desktop app kiểm tra và tải bản cập nhật `.exe`:
+
+- `GET /api/app-updates/latest?current_version=1.0.0`
+  - Trả về `has_update`, metadata version mới nhất và `download_url`.
+- `GET /api/app-updates/download/{filename}`
+  - Download file cài đặt `app.exe`.
+- `POST /api/admin/app-updates/publish` (yêu cầu `auth:sanctum`)
+  - Form-data:
+    - `version` (required)
+    - `notes` (optional)
+    - `mandatory` (optional, boolean)
+    - `file` (required, `.exe`, tối đa ~100MB)
+
+Metadata update được lưu tại `storage/app/public/app-updates/latest.json`, file nhị phân lưu trong `storage/app/public/app-updates/releases`.
+
+> Nhớ chạy `php artisan storage:link` để public disk hoạt động đúng khi deploy.

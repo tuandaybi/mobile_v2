@@ -3,7 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     MobileInController, MobileOutController, PurchaseInvoiceController, 
     ServiceController, AuthController, DebtController, HomeController,
-    ReportController, InboxController, ZaloWebhookController
+    ReportController, InboxController, ZaloWebhookController, AppUpdateController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -20,6 +20,9 @@ Route::get('/home', [HomeController::class, 'index'])->middleware('auth:sanctum'
 
 //Zalo Webhook
 Route::post('/zalo/webhook', [ZaloWebhookController::class, 'handle']);
+
+Route::get('/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
+Route::get('/app-updates/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
 
 Route::middleware('auth:sanctum')->group(function () {
     // Profile
@@ -95,6 +98,9 @@ Route::middleware(['auth:sanctum'])
 
         //Admin -> Colors
         Route::apiResource('colors', ColorController::class);
+
+        // Admin -> App updates
+        Route::post('app-updates/publish', [AppUpdateController::class, 'publish']);
 
         //Admin -> Backups
         Route::get('backups', [BackupController::class, 'index']);
