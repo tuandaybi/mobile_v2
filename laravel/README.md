@@ -62,19 +62,22 @@ The Laravel framework is open-sourced software licensed under the [MIT license](
 
 ## App update API (app.exe)
 
-Server đã có sẵn API để desktop app kiểm tra và tải bản cập nhật `.exe`:
+Server da ho tro nhieu ung dung desktop dung chung mot backend update. Moi app duoc phan tach bang `app_slug`.
 
-- `GET /api/app-updates/latest?current_version=1.0.0`
-  - Trả về `has_update`, metadata version mới nhất và `download_url`.
-- `GET /api/app-updates/download/{filename}`
-  - Download file cài đặt `app.exe`.
-- `POST /api/admin/app-updates/publish` (yêu cầu `auth:sanctum`)
+- `GET /api/app-updates/{app_slug}/latest?current_version=1.0.0`
+  - Tra ve `has_update`, metadata ban moi nhat va `download_url` cho dung app.
+- `GET /api/app-updates/{app_slug}/download/{filename}`
+  - Download file cai dat cua app do.
+- `GET /api/app-updates/latest?app_slug={app_slug}&current_version=1.0.0`
+  - Endpoint tuong thich nguoc cho client cu.
+- `POST /api/admin/app-updates/publish` (yeu cau `auth:sanctum`)
   - Form-data:
+    - `app_slug` (required, vi du `desktop-pos`, `desktop-crm`)
     - `version` (required)
     - `notes` (optional)
     - `mandatory` (optional, boolean)
-    - `file` (required, `.exe`, tối đa ~100MB)
+    - `file` (required, `.exe`, toi da ~100MB)
 
-Metadata update được lưu tại `storage/app/public/app-updates/latest.json`, file nhị phân lưu trong `storage/app/public/app-updates/releases`.
+Metadata duoc luu tai `storage/app/public/app-updates/{app_slug}/latest.json`, file nhi phan luu trong `storage/app/public/app-updates/{app_slug}/releases`.
 
-> Nhớ chạy `php artisan storage:link` để public disk hoạt động đúng khi deploy.
+> Nho chay `php artisan storage:link` de public disk hoat dong dung khi deploy.

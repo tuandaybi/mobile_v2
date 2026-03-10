@@ -9,26 +9,29 @@ use Illuminate\Support\Str;
 
 class AppUpdateController extends Controller
 {
-    private const META_PATH = 'app-updates/latest.json';
-    private const RELEASES_DIR = 'app-updates/releases';
+    private const ROOT_DIR = 'app-updates';
 
-    public function latest(Request $request): JsonResponse
+    public function latest(Request $request, ?string $appSlug = null): JsonResponse
     {
         $request->validate([
+            'app_slug' => ['nullable', 'string', 'max:100'],
             'current_version' => ['nullable', 'string', 'max:50'],
         ]);
 
-        if (!Storage::disk('public')->exists(self::META_PATH)) {
+        $appSlug = $this->resolveAppSlug($request, $appSlug);
+        $metaPath = $this->metaPath($appSlug);
+
+        if (!Storage::disk('public')->exists($metaPath)) {
             return response()->json([
-                'message' => 'Chưa có bản cập nhật nào được phát hành.',
+                'message' => 'Chua co ban cap nhat nao duoc phat hanh.',
             ], 404);
         }
 
-        $payload = json_decode(Storage::disk('public')->get(self::META_PATH), true);
+        $payload = json_decode(Storage::disk('public')->get($metaPath), true);
 
         if (!is_array($payload) || !isset($payload['version'], $payload['file_path'])) {
             return response()->json([
-                'message' => 'Metadata bản cập nhật không hợp lệ.',
+                'message' => 'Metadata ban cap nhat khong hop le.',
             ], 500);
         }
 
@@ -36,6 +39,7 @@ class AppUpdateController extends Controller
         $hasUpdate = $currentVersion === '' || version_compare($payload['version'], $currentVersion, '>');
 
         return response()->json([
+            'app_slug' => $appSlug,
             'has_update' => $hasUpdate,
             'latest' => [
                 'version' => $payload['version'],
@@ -45,6 +49,7 @@ class AppUpdateController extends Controller
                 'size' => (int) ($payload['size'] ?? 0),
                 'sha256' => $payload['sha256'] ?? null,
                 'download_url' => route('app-updates.download', [
+                    'appSlug' => $appSlug,
                     'filename' => basename($payload['file_path']),
                 ]),
             ],
@@ -54,19 +59,22 @@ class AppUpdateController extends Controller
     public function publish(Request $request): JsonResponse
     {
         $validated = $request->validate([
+            'app_slug' => ['required', 'string', 'max:100'],
             'version' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'mandatory' => ['nullable', 'boolean'],
             'file' => ['required', 'file', 'mimetypes:application/x-msdownload,application/octet-stream', 'max:102400'],
         ]);
 
+        $appSlug = $this->sanitizeAppSlug($validated['app_slug']);
         $file = $request->file('file');
         $slugVersion = Str::slug($validated['version']);
-        $filename = "app-{$slugVersion}-" . now()->format('YmdHis') . '.exe';
-        $path = $file->storeAs(self::RELEASES_DIR, $filename, 'public');
+        $filename = "{$appSlug}-{$slugVersion}-" . now()->format('YmdHis') . '.exe';
+        $path = $file->storeAs($this->releasesDir($appSlug), $filename, 'public');
 
         $fullPath = Storage::disk('public')->path($path);
         $meta = [
+            'app_slug' => $appSlug,
             'version' => $validated['version'],
             'notes' => $validated['notes'] ?? '',
             'mandatory' => (bool) ($validated['mandatory'] ?? false),
@@ -76,23 +84,51 @@ class AppUpdateController extends Controller
             'published_at' => now()->toIso8601String(),
         ];
 
-        Storage::disk('public')->put(self::META_PATH, json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+        Storage::disk('public')->put($this->metaPath($appSlug), json_encode($meta, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         return response()->json([
-            'message' => 'Đã phát hành bản cập nhật mới.',
+            'message' => 'Da phat hanh ban cap nhat moi.',
             'release' => $meta,
-            'download_url' => route('app-updates.download', ['filename' => basename($path)]),
+            'download_url' => route('app-updates.download', [
+                'appSlug' => $appSlug,
+                'filename' => basename($path),
+            ]),
         ], 201);
     }
 
-    public function download(string $filename)
+    public function download(string $appSlug, string $filename)
     {
-        $path = self::RELEASES_DIR . '/' . basename($filename);
+        $sanitizedAppSlug = $this->sanitizeAppSlug($appSlug);
+        $path = $this->releasesDir($sanitizedAppSlug) . '/' . basename($filename);
 
-        abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file update.');
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file update.');
 
         return Storage::disk('public')->download($path, 'app.exe', [
             'Content-Type' => 'application/octet-stream',
         ]);
+    }
+
+    private function resolveAppSlug(Request $request, ?string $appSlug): string
+    {
+        return $this->sanitizeAppSlug($appSlug ?: $request->string('app_slug')->toString());
+    }
+
+    private function sanitizeAppSlug(string $appSlug): string
+    {
+        $sanitized = Str::slug($appSlug);
+
+        abort_if($sanitized === '', 422, 'app_slug khong hop le.');
+
+        return $sanitized;
+    }
+
+    private function metaPath(string $appSlug): string
+    {
+        return self::ROOT_DIR . '/' . $appSlug . '/latest.json';
+    }
+
+    private function releasesDir(string $appSlug): string
+    {
+        return self::ROOT_DIR . '/' . $appSlug . '/releases';
     }
 }
