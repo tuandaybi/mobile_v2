@@ -5,25 +5,30 @@ namespace App\Http\Controllers;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 
 class AppUpdateController extends Controller
 {
     private const ROOT_DIR = 'app-updates';
+    private const TRASH_DIR = 'app-updates-trash';
     private const DEFAULT_CHANNEL = 'app';
 
     public function dashboard(): View
     {
+        $this->purgeExpiredTrash();
+
         return view('app-updates.dashboard', [
             'listUrl' => '/api/admin/app-updates',
             'publishUrl' => '/api/admin/app-updates/publish',
-            'loginUrl' => '/api/login',
         ]);
     }
 
     public function index(): JsonResponse
     {
+        $this->purgeExpiredTrash();
+
         return response()->json([
             'releases' => $this->releaseCollection()->values(),
         ]);
@@ -80,6 +85,8 @@ class AppUpdateController extends Controller
 
     public function publish(Request $request): JsonResponse
     {
+        $this->purgeExpiredTrash();
+
         $validated = $request->validate([
             'app_slug' => ['required', 'string', 'max:100'],
             'channel' => ['nullable', 'string', 'max:100'],
@@ -124,16 +131,34 @@ class AppUpdateController extends Controller
 
     public function destroy(string $appSlug, string $channel): JsonResponse
     {
+        $this->purgeExpiredTrash();
+
         $appSlug = $this->sanitizeSegment($appSlug, 'app_slug');
         $channel = $this->sanitizeSegment($channel, 'channel');
         $channelDir = self::ROOT_DIR . '/' . $appSlug . '/' . $channel;
 
         abort_unless(Storage::disk('public')->exists($channelDir), 404, 'Khong tim thay release de xoa.');
 
-        Storage::disk('public')->deleteDirectory($channelDir);
+        $trashDir = $this->trashDir($appSlug, $channel);
+        $sourcePath = Storage::disk('public')->path($channelDir);
+        $trashPath = Storage::disk('public')->path($trashDir);
+
+        File::ensureDirectoryExists(dirname($trashPath));
+
+        if (File::exists($trashPath)) {
+            File::deleteDirectory($trashPath);
+        }
+
+        File::moveDirectory($sourcePath, $trashPath);
+        Storage::disk('public')->put($trashDir . '/deleted.json', json_encode([
+            'app_slug' => $appSlug,
+            'channel' => $channel,
+            'deleted_at' => now()->toIso8601String(),
+            'purge_after' => now()->addDays(30)->toIso8601String(),
+        ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 
         return response()->json([
-            'message' => 'Da xoa release va cac file lien quan.',
+            'message' => 'Da dua release vao trash. File se bi xoa vinh vien sau 30 ngay.',
         ]);
     }
 
@@ -226,5 +251,29 @@ class AppUpdateController extends Controller
     private function releasesDir(string $appSlug, string $channel): string
     {
         return self::ROOT_DIR . '/' . $appSlug . '/' . $channel . '/releases';
+    }
+
+    private function trashDir(string $appSlug, string $channel): string
+    {
+        return self::TRASH_DIR . '/' . $appSlug . '/' . $channel;
+    }
+
+    private function purgeExpiredTrash(): void
+    {
+        collect(Storage::disk('public')->allFiles(self::TRASH_DIR))
+            ->filter(fn (string $path) => Str::endsWith($path, '/deleted.json'))
+            ->each(function (string $path) {
+                $payload = json_decode(Storage::disk('public')->get($path), true);
+
+                if (!is_array($payload) || empty($payload['purge_after'])) {
+                    return;
+                }
+
+                if (now()->lt($payload['purge_after'])) {
+                    return;
+                }
+
+                Storage::disk('public')->deleteDirectory(dirname($path));
+            });
     }
 }
