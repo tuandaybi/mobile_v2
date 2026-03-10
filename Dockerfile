@@ -1,6 +1,6 @@
 FROM php:8.2-fpm
 
-# Cài extension PHP + Node.js + MySQL client
+# Cai extension PHP + Node.js + MySQL client
 RUN apt-get update && apt-get install -y \
     bash \
     build-essential \
@@ -21,22 +21,23 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y nodejs \
     && rm -rf /var/lib/apt/lists/*
 
-# Cài Composer
+# Cai Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# Set thư mục làm việc
+# Set thu muc lam viec
 WORKDIR /var/www/html
 
-# Copy code Laravel vào container
+# Copy code Laravel vao container
 COPY ./laravel /var/www/html
+COPY ./docker/php/uploads.ini /usr/local/etc/php/conf.d/uploads.ini
 
-# Cài thư viện PHP cho Laravel
+# Cai thu vien PHP cho Laravel
 RUN composer install --no-interaction --prefer-dist
 
 # Copy file .env
 COPY ./laravel/.env /var/www/html
 
-# Set quyền để Laravel ghi cache, logs
+# Set quyen de Laravel ghi cache, logs
 RUN chown -R www-data:www-data /var/www/html \
     && chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
 
