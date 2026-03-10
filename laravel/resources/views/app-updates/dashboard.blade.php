@@ -1,803 +1,358 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Update Control</title>
+    <title>Update Manager</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
-        :root {
-            --bg: #eee6d9;
-            --panel: rgba(255, 251, 245, 0.88);
-            --panel-strong: rgba(255, 251, 245, 0.96);
-            --ink: #182033;
-            --muted: #5f6877;
-            --line: rgba(24, 32, 51, 0.12);
-            --accent: #b45309;
-            --accent-soft: rgba(180, 83, 9, 0.12);
-            --ok: #0f766e;
-            --danger: #b91c1c;
-            --shadow: 0 18px 48px rgba(24, 32, 51, 0.08);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: Georgia, "Times New Roman", serif;
-            color: var(--ink);
-            background:
-                radial-gradient(circle at top left, rgba(180, 83, 9, 0.18), transparent 26%),
-                radial-gradient(circle at bottom right, rgba(15, 118, 110, 0.12), transparent 24%),
-                linear-gradient(135deg, #f7f2e8, #ece2d1 58%, #e5d7c4);
-        }
-
-        .wrap {
-            width: min(1320px, calc(100% - 32px));
-            margin: 0 auto;
-            padding: 28px 0 48px;
-        }
-
-        .hero,
-        .panel {
-            border: 1px solid var(--line);
-            border-radius: 28px;
-            background: var(--panel);
-            box-shadow: var(--shadow);
-            backdrop-filter: blur(12px);
-        }
-
-        .hero {
-            display: grid;
-            gap: 10px;
-            padding: 24px 28px;
-            margin-bottom: 18px;
-        }
-
-        .eyebrow {
-            margin: 0;
-            color: var(--accent);
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.18em;
-        }
-
-        h1 {
-            margin: 0;
-            font-size: clamp(34px, 5vw, 64px);
-            line-height: 0.94;
-        }
-
-        .sub {
-            margin: 0;
-            color: var(--muted);
-            font-size: 16px;
-            line-height: 1.7;
-            max-width: 760px;
-        }
-
-        .login-shell {
-            display: grid;
-            grid-template-columns: 1.3fr 0.7fr;
-            gap: 18px;
-            margin-bottom: 18px;
-        }
-
-        .panel {
-            padding: 22px;
-        }
-
-        .panel h2 {
-            margin: 0 0 12px;
-            font-size: 28px;
-        }
-
-        .panel p {
-            margin: 0;
-            color: var(--muted);
-            line-height: 1.6;
-        }
-
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-        }
-
-        .field {
-            display: grid;
-            gap: 8px;
-            margin-top: 14px;
-        }
-
-        .field-wide {
-            grid-column: 1 / -1;
-        }
-
-        label {
-            font-size: 12px;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: var(--muted);
-        }
-
-        input,
-        textarea,
-        button {
-            font: inherit;
-        }
-
-        input,
-        textarea {
-            width: 100%;
-            border: 1px solid var(--line);
-            border-radius: 16px;
-            padding: 13px 14px;
-            background: rgba(255, 255, 255, 0.82);
-            color: var(--ink);
-        }
-
-        textarea {
-            min-height: 126px;
-            resize: vertical;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            align-items: center;
-            flex-wrap: wrap;
-            margin-top: 18px;
-        }
-
-        .btn {
-            border: 1px solid var(--line);
-            border-radius: 999px;
-            min-height: 46px;
-            padding: 0 16px;
-            background: #fff;
-            color: var(--ink);
-            font-weight: 700;
-            cursor: pointer;
-        }
-
-        .btn-primary {
-            background: var(--ink);
-            color: #fff;
-            border-color: var(--ink);
-        }
-
-        .btn-danger {
-            color: var(--danger);
-            border-color: rgba(185, 28, 28, 0.2);
-            background: rgba(255, 255, 255, 0.72);
-        }
-
-        .btn:disabled {
-            opacity: 0.65;
-            cursor: progress;
-        }
-
-        .summary {
-            display: grid;
-            gap: 10px;
-        }
-
-        .summary-box {
-            padding: 14px 16px;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: var(--panel-strong);
-        }
-
-        .summary-box strong {
-            display: block;
-            font-size: 24px;
-            margin-bottom: 4px;
-        }
-
-        .dashboard {
-            display: grid;
-            grid-template-columns: 0.92fr 1.08fr;
-            gap: 18px;
-        }
-
-        .stack {
-            display: grid;
-            gap: 18px;
-        }
-
-        .status {
-            margin-top: 14px;
-            padding: 14px 16px;
-            border-radius: 18px;
-            border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.68);
-            display: none;
-        }
-
-        .status.ok {
-            display: block;
-            border-color: rgba(15, 118, 110, 0.28);
-            color: var(--ok);
-        }
-
-        .status.error {
-            display: block;
-            border-color: rgba(185, 28, 28, 0.28);
-            color: var(--danger);
-        }
-
-        .token-hint {
-            margin-top: 12px;
-            padding: 12px 14px;
-            border-radius: 16px;
-            background: var(--accent-soft);
-            color: #9a3412;
-        }
-
-        .list {
-            display: grid;
-            gap: 14px;
-            margin-top: 18px;
-        }
-
-        .release {
-            border: 1px solid var(--line);
-            border-radius: 22px;
-            padding: 18px;
-            background: var(--panel-strong);
-        }
-
-        .release-head {
-            display: flex;
-            justify-content: space-between;
-            gap: 12px;
-            align-items: start;
-        }
-
-        .release-title {
-            margin: 0;
-            font-size: 24px;
-        }
-
-        .pill {
-            display: inline-block;
-            margin-top: 6px;
-            padding: 4px 10px;
-            border-radius: 999px;
-            font-size: 12px;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            background: var(--accent-soft);
-            color: var(--accent);
-        }
-
-        .release-version {
-            font-size: 24px;
-            font-weight: 700;
-            white-space: nowrap;
-        }
-
-        .release-meta {
-            display: grid;
-            gap: 8px;
-            margin: 14px 0;
-            color: var(--muted);
-            font-size: 14px;
-        }
-
-        .release-meta strong {
-            color: var(--ink);
-        }
-
-        .release-notes {
-            margin: 0 0 14px;
-            padding: 14px;
-            border-radius: 16px;
-            border: 1px solid rgba(24, 32, 51, 0.08);
-            background: rgba(255, 255, 255, 0.72);
-            line-height: 1.6;
-            color: var(--ink);
-        }
-
-        .release-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .empty {
-            margin-top: 18px;
-            padding: 20px;
-            border: 1px dashed var(--line);
-            border-radius: 20px;
-            color: var(--muted);
-            background: rgba(255, 255, 255, 0.52);
-        }
-
-        pre {
-            margin: 14px 0 0;
-            padding: 14px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.72);
-            border: 1px solid rgba(24, 32, 51, 0.08);
-            overflow: auto;
-            color: var(--ink);
-            font-size: 13px;
-            line-height: 1.5;
-            font-family: Consolas, "Courier New", monospace;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        @media (max-width: 980px) {
-            .login-shell,
-            .dashboard,
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body>
-    <div
-        class="wrap"
-        data-login-url="{{ $loginUrl }}"
-        data-list-url="{{ $listUrl }}"
-        data-publish-url="{{ $publishUrl }}"
-    >
-        <section class="hero">
-            <p class="eyebrow">Update control</p>
-            <h1>Release center</h1>
-            <p class="sub">Dang nhap bang tai khoan Laravel de lay Sanctum token. Sau do dashboard se cho phep upload file `.exe`, xem danh sach release tren server, download va xoa tron bo metadata + binary cua tung channel.</p>
-        </section>
-
-        <section class="login-shell">
-            <div class="panel">
-                <h2>Login</h2>
-                <p>Dung luon API login hien tai cua Laravel. Token lay duoc se tu dong do vao form upload, nhung form van bat buoc co Bearer Token moi cho submit.</p>
-
-                <form id="loginForm">
-                    <div class="grid">
-                        <div class="field">
-                            <label for="email">Email</label>
-                            <input id="email" name="email" type="email" autocomplete="username" required>
+<body class="bg-slate-100 text-slate-800">
+    <div id="app" class="min-h-screen" data-login-url="{{ $loginUrl }}" data-list-url="{{ $listUrl }}" data-publish-url="{{ $publishUrl }}">
+        <div class="flex min-h-screen">
+            <aside class="hidden xl:flex w-72 flex-col border-r border-slate-200 bg-white">
+                <div class="p-6 border-b border-slate-100">
+                    <div class="flex items-center gap-3">
+                        <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-600 text-white">
+                            <i data-lucide="rocket" class="h-5 w-5"></i>
                         </div>
-                        <div class="field">
-                            <label for="password">Password</label>
-                            <input id="password" name="password" type="password" autocomplete="current-password" required>
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-slate-400">Laravel</p>
+                            <h1 class="text-xl font-bold text-slate-900">Update Manager</h1>
                         </div>
-                    </div>
-
-                    <div class="actions">
-                        <button class="btn btn-primary" id="loginBtn" type="submit">Login and get token</button>
-                    </div>
-                </form>
-
-                <div id="loginStatus" class="status"></div>
-                <pre id="loginOutput" class="hidden"></pre>
-            </div>
-
-            <div class="panel">
-                <h2>Session</h2>
-                <div class="summary">
-                    <div class="summary-box">
-                        <strong id="sessionUser">Chua dang nhap</strong>
-                        <span id="sessionEmail">Token se xuat hien sau khi login thanh cong.</span>
-                    </div>
-                    <div class="summary-box">
-                        <strong id="releaseCount">0</strong>
-                        <span>Release channel tren server</span>
-                    </div>
-                    <div class="summary-box">
-                        <strong id="appCount">0</strong>
-                        <span>App dang co metadata update</span>
                     </div>
                 </div>
-            </div>
-        </section>
-
-        <section class="dashboard">
-            <div class="stack">
-                <div class="panel">
-                    <h2>Upload</h2>
-                    <p>Boi vi route publish duoc bao ve boi Sanctum, form nay bat buoc phai co Bearer Token hop le moi duoc gui.</p>
-
-                    <form id="uploadForm">
-                        <div class="field">
-                            <label for="token">Bearer Token</label>
-                            <input id="token" name="token" type="password" placeholder="49|..." required>
-                        </div>
-
-                        <div class="grid">
-                            <div class="field">
-                                <label for="appSlug">App Slug</label>
-                                <input id="appSlug" name="appSlug" type="text" value="tiktok-bot" required>
-                            </div>
-                            <div class="field">
-                                <label for="channel">Channel</label>
-                                <input id="channel" name="channel" type="text" value="app" required>
-                            </div>
-                            <div class="field">
-                                <label for="version">Version</label>
-                                <input id="version" name="version" type="text" value="1.0.0" required>
-                            </div>
-                            <div class="field">
-                                <label for="mandatory">Mandatory</label>
-                                <input id="mandatory" name="mandatory" type="text" value="1" placeholder="1 or 0">
-                            </div>
-                        </div>
-
-                        <div class="field">
-                            <label for="notes">Notes</label>
-                            <textarea id="notes" name="notes">Release uploaded from update dashboard.</textarea>
-                        </div>
-
-                        <div class="field">
-                            <label for="file">EXE File</label>
-                            <input id="file" name="file" type="file" accept=".exe" required>
-                        </div>
-
-                        <div class="actions">
-                            <button class="btn btn-primary" id="uploadBtn" type="submit">Upload release</button>
-                            <button class="btn" type="button" data-channel="app">Use app</button>
-                            <button class="btn" type="button" data-channel="bot-server">Use bot-server</button>
-                        </div>
-                    </form>
-
-                    <div class="token-hint">Token o tren co the duoc do tu dong sau khi login, nhung mày van co the thay the bang token khac de thao tac.</div>
-                    <div id="uploadStatus" class="status"></div>
-                    <pre id="uploadOutput" class="hidden"></pre>
-                </div>
-            </div>
-
-            <div class="panel">
-                <div class="release-head">
-                    <div>
-                        <h2>Server files</h2>
-                        <p>Moi item tuong ung mot `app_slug/channel`. Xoa se xoa ca metadata `latest.json` va toan bo file trong thu muc channel do.</p>
+                <div class="space-y-4 p-4">
+                    <div class="rounded-2xl border border-blue-100 bg-blue-50 p-4">
+                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-blue-500">Current user</p>
+                        <p id="sessionUserAside" class="mt-2 font-semibold text-slate-900">Chua dang nhap</p>
+                        <p id="sessionEmailAside" class="mt-1 text-sm text-slate-500">Login de lay Sanctum token.</p>
                     </div>
-                    <div class="actions">
-                        <button class="btn" id="refreshBtn" type="button">Refresh</button>
+                    <div class="grid grid-cols-2 gap-3">
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p id="releaseCountAside" class="text-3xl font-bold text-slate-900">0</p>
+                            <p class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Release</p>
+                        </div>
+                        <div class="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                            <p id="appCountAside" class="text-3xl font-bold text-slate-900">0</p>
+                            <p class="mt-1 text-xs uppercase tracking-[0.18em] text-slate-400">Apps</p>
+                        </div>
                     </div>
                 </div>
+            </aside>
 
-                <div id="listStatus" class="status"></div>
-                <div id="releaseList" class="list"></div>
-                <div id="emptyState" class="empty hidden">Chua co release nao tren server.</div>
-            </div>
-        </section>
+            <main class="flex-1 min-w-0">
+                <header class="border-b border-slate-200 bg-white">
+                    <div class="flex items-center justify-between gap-4 px-6 py-5 lg:px-8">
+                        <div>
+                            <p class="text-xs font-semibold uppercase tracking-[0.25em] text-blue-600">update.0977769666.click</p>
+                            <h2 class="mt-2 text-3xl font-bold text-slate-900">Professional Release Center</h2>
+                            <p class="mt-2 text-sm text-slate-500">Dang nhap bang API Laravel, upload release va quan ly file tren server trong cung mot trang.</p>
+                        </div>
+                        <button id="refreshBtn" class="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700">
+                            <i data-lucide="refresh-cw" class="h-4 w-4"></i>
+                            Refresh
+                        </button>
+                    </div>
+                </header>
+
+                <div class="space-y-6 px-6 py-6 lg:px-8">
+                    <section class="grid gap-6 lg:grid-cols-[1.3fr_0.7fr]">
+                        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Login</p>
+                            <h3 class="mt-2 text-2xl font-bold text-slate-900">Dang nhap de lay Bearer Token</h3>
+                            <form id="loginForm" class="mt-5 grid gap-4 md:grid-cols-2">
+                                <div>
+                                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Email</label>
+                                    <input id="email" type="email" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                </div>
+                                <div>
+                                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Password</label>
+                                    <input id="password" type="password" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                </div>
+                                <div class="md:col-span-2 flex flex-wrap items-center gap-3">
+                                    <button id="loginBtn" type="submit" class="inline-flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white">
+                                        <i data-lucide="log-in" class="h-4 w-4"></i>
+                                        Login and get token
+                                    </button>
+                                    <div id="loginStatus" class="hidden rounded-2xl border px-4 py-3 text-sm font-medium"></div>
+                                </div>
+                            </form>
+                            <pre id="loginOutput" class="mt-4 hidden overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100"></pre>
+                        </div>
+
+                        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Session</p>
+                            <div class="mt-4 space-y-4">
+                                <div class="rounded-2xl bg-slate-50 p-4">
+                                    <p id="sessionUser" class="font-semibold text-slate-900">Chua dang nhap</p>
+                                    <p id="sessionEmail" class="mt-1 text-sm text-slate-500">Token se tu dong nap vao form upload.</p>
+                                </div>
+                                <div class="grid grid-cols-2 gap-3">
+                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                        <p id="releaseCount" class="text-3xl font-bold text-slate-900">0</p>
+                                        <p class="mt-1 text-sm text-slate-500">Release channels</p>
+                                    </div>
+                                    <div class="rounded-2xl bg-slate-50 p-4">
+                                        <p id="appCount" class="text-3xl font-bold text-slate-900">0</p>
+                                        <p class="mt-1 text-sm text-slate-500">Apps</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+                        <div class="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+                            <div class="flex items-center justify-between">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Upload</p>
+                                    <h3 class="mt-2 text-2xl font-bold text-slate-900">Publish release</h3>
+                                </div>
+                                <div class="rounded-2xl bg-blue-50 p-3 text-blue-600">
+                                    <i data-lucide="upload-cloud" class="h-5 w-5"></i>
+                                </div>
+                            </div>
+
+                            <form id="uploadForm" class="mt-5 space-y-4">
+                                <div>
+                                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Bearer Token</label>
+                                    <input id="token" type="password" placeholder="49|..." required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                </div>
+                                <div class="grid gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">App Slug</label>
+                                        <input id="appSlug" type="text" value="tiktok-bot" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                    </div>
+                                    <div>
+                                        <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Channel</label>
+                                        <input id="channel" type="text" value="app" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                    </div>
+                                    <div>
+                                        <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Version</label>
+                                        <input id="version" type="text" value="1.0.0" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                    </div>
+                                    <div>
+                                        <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Mandatory</label>
+                                        <input id="mandatory" type="text" value="1" placeholder="1 or 0" class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">
+                                    </div>
+                                </div>
+                                <div>
+                                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Notes</label>
+                                    <textarea id="notes" class="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 outline-none focus:border-blue-400">Release uploaded from update dashboard.</textarea>
+                                </div>
+                                <div>
+                                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">EXE File</label>
+                                    <input id="file" type="file" accept=".exe" required class="w-full rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white">
+                                </div>
+                                <div class="flex flex-wrap gap-3">
+                                    <button id="uploadBtn" type="submit" class="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white">
+                                        <i data-lucide="upload" class="h-4 w-4"></i>
+                                        Upload release
+                                    </button>
+                                    <button type="button" data-channel="app" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Use app</button>
+                                    <button type="button" data-channel="bot-server" class="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700">Use bot-server</button>
+                                </div>
+                            </form>
+                            <div id="uploadStatus" class="mt-4 hidden rounded-2xl border px-4 py-3 text-sm font-medium"></div>
+                            <pre id="uploadOutput" class="mt-4 hidden overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100"></pre>
+                        </div>
+
+                        <div class="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+                            <div class="flex items-center justify-between gap-4 border-b border-slate-200 px-6 py-5">
+                                <div>
+                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-400">Server files</p>
+                                    <h3 class="mt-2 text-2xl font-bold text-slate-900">Quan ly release tren server</h3>
+                                </div>
+                                <div id="listStatus" class="hidden rounded-2xl border px-4 py-3 text-sm font-medium"></div>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="min-w-full text-left">
+                                    <thead class="bg-slate-50 text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">
+                                        <tr>
+                                            <th class="px-6 py-4">File</th>
+                                            <th class="px-6 py-4">Version</th>
+                                            <th class="px-6 py-4">Size</th>
+                                            <th class="px-6 py-4">Published</th>
+                                            <th class="px-6 py-4">Mode</th>
+                                            <th class="px-6 py-4 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="releaseList" class="divide-y divide-slate-100"></tbody>
+                                </table>
+                            </div>
+                            <div id="emptyState" class="hidden px-6 py-10 text-center text-sm text-slate-500">Chua co release nao tren server.</div>
+                        </div>
+                    </section>
+                </div>
+            </main>
+        </div>
     </div>
 
     <script>
-        const root = document.querySelector('.wrap');
+        const root = document.getElementById('app');
         const loginUrl = root.dataset.loginUrl;
         const listUrl = root.dataset.listUrl;
         const publishUrl = root.dataset.publishUrl;
         const stateKey = 'update-dashboard-state';
-        const channelInput = document.getElementById('channel');
-
-        const loginForm = document.getElementById('loginForm');
-        const uploadForm = document.getElementById('uploadForm');
-        const loginBtn = document.getElementById('loginBtn');
-        const uploadBtn = document.getElementById('uploadBtn');
-        const refreshBtn = document.getElementById('refreshBtn');
-
-        const loginStatus = document.getElementById('loginStatus');
-        const loginOutput = document.getElementById('loginOutput');
-        const uploadStatus = document.getElementById('uploadStatus');
-        const uploadOutput = document.getElementById('uploadOutput');
-        const listStatus = document.getElementById('listStatus');
-        const releaseList = document.getElementById('releaseList');
-        const emptyState = document.getElementById('emptyState');
-
-        const sessionUser = document.getElementById('sessionUser');
-        const sessionEmail = document.getElementById('sessionEmail');
-        const releaseCount = document.getElementById('releaseCount');
-        const appCount = document.getElementById('appCount');
+        const ids = (id) => document.getElementById(id);
+        const loginStatus = ids('loginStatus');
+        const uploadStatus = ids('uploadStatus');
+        const listStatus = ids('listStatus');
 
         function setStatus(el, type, message) {
-            el.className = 'status ' + type;
+            el.className = 'mt-4 block rounded-2xl border px-4 py-3 text-sm font-medium';
+            if (type === 'ok') el.classList.add('border-emerald-200', 'bg-emerald-50', 'text-emerald-700');
+            else if (type === 'error') el.classList.add('border-rose-200', 'bg-rose-50', 'text-rose-700');
+            else el.classList.add('border-slate-200', 'bg-slate-50', 'text-slate-600');
             el.textContent = message;
         }
-
-        function clearStatus(el) {
-            el.className = 'status';
-            el.textContent = '';
-        }
-
-        function showOutput(el, payload) {
-            el.classList.remove('hidden');
-            el.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
-        }
-
-        function hideOutput(el) {
-            el.classList.add('hidden');
-            el.textContent = '';
-        }
-
-        function getToken() {
-            return document.getElementById('token').value.trim();
-        }
-
+        function clearStatus(el) { el.className = 'hidden rounded-2xl border px-4 py-3 text-sm font-medium'; el.textContent = ''; }
+        function showOutput(el, payload) { el.classList.remove('hidden'); el.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2); }
+        function hideOutput(el) { el.classList.add('hidden'); el.textContent = ''; }
+        function getToken() { return ids('token').value.trim(); }
         function persistState() {
-            const state = {
-                email: document.getElementById('email').value,
-                appSlug: document.getElementById('appSlug').value,
-                channel: document.getElementById('channel').value,
-                version: document.getElementById('version').value,
-                mandatory: document.getElementById('mandatory').value,
-                notes: document.getElementById('notes').value,
-                token: document.getElementById('token').value,
-            };
-            localStorage.setItem(stateKey, JSON.stringify(state));
+            localStorage.setItem(stateKey, JSON.stringify({
+                email: ids('email').value, appSlug: ids('appSlug').value, channel: ids('channel').value,
+                version: ids('version').value, mandatory: ids('mandatory').value, notes: ids('notes').value, token: ids('token').value,
+            }));
         }
-
         function hydrateState() {
             try {
                 const state = JSON.parse(localStorage.getItem(stateKey) || '{}');
-                Object.entries(state).forEach(([key, value]) => {
-                    const el = document.getElementById(key);
-                    if (el && value !== undefined) {
-                        el.value = value;
-                    }
-                });
-            } catch (error) {
-                console.error(error);
-            }
+                Object.entries(state).forEach(([key, value]) => { if (ids(key) && value !== undefined) ids(key).value = value; });
+            } catch {}
         }
-
         async function parseResponse(response) {
-            const rawText = await response.text();
-            try {
-                return JSON.parse(rawText);
-            } catch (error) {
-                return rawText;
-            }
+            const raw = await response.text();
+            try { return JSON.parse(raw); } catch { return raw; }
         }
-
+        function syncSession(payload) {
+            const name = payload?.user?.name || 'Da dang nhap';
+            const email = payload?.user?.email || 'Token da duoc cap.';
+            ids('sessionUser').textContent = name; ids('sessionEmail').textContent = email;
+            ids('sessionUserAside').textContent = name; ids('sessionEmailAside').textContent = email;
+        }
+        function renderCounts(releases) {
+            const count = String(releases.length);
+            const apps = String(new Set(releases.map((item) => item.app_slug)).size);
+            ids('releaseCount').textContent = count; ids('releaseCountAside').textContent = count;
+            ids('appCount').textContent = apps; ids('appCountAside').textContent = apps;
+        }
         async function loadReleases() {
-            const token = getToken();
-            if (!token) {
-                setStatus(listStatus, 'error', 'Chua co Bearer Token de tai danh sach release.');
-                return;
-            }
-
-            setStatus(listStatus, 'ok', 'Dang tai danh sach release...');
-
-            const response = await fetch(listUrl, {
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
-                },
-            });
-
+            if (!getToken()) { setStatus(listStatus, 'error', 'Chua co Bearer Token de tai danh sach release.'); return; }
+            setStatus(listStatus, 'muted', 'Dang tai danh sach release...');
+            const response = await fetch(listUrl, { headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
             const payload = await parseResponse(response);
-
-            if (!response.ok) {
-                setStatus(listStatus, 'error', 'Khong tai duoc danh sach release. HTTP ' + response.status + '.');
-                showOutput(loginOutput, payload);
-                return;
-            }
-
+            if (!response.ok) { setStatus(listStatus, 'error', 'Khong tai duoc danh sach release. HTTP ' + response.status + '.'); showOutput(ids('uploadOutput'), payload); return; }
             renderReleases(payload.releases || []);
             setStatus(listStatus, 'ok', 'Da tai xong danh sach release.');
         }
-
         function renderReleases(releases) {
-            releaseList.innerHTML = '';
-            releaseCount.textContent = String(releases.length);
-            appCount.textContent = String(new Set(releases.map((item) => item.app_slug)).size);
-
-            if (!releases.length) {
-                emptyState.classList.remove('hidden');
-                return;
-            }
-
-            emptyState.classList.add('hidden');
-
+            const tbody = ids('releaseList');
+            tbody.innerHTML = '';
+            renderCounts(releases);
+            ids('emptyState').classList.toggle('hidden', releases.length > 0);
             releases.forEach((release) => {
-                const article = document.createElement('article');
-                article.className = 'release';
-                article.innerHTML = `
-                    <div class="release-head">
-                        <div>
-                            <h3 class="release-title">${release.app_slug}</h3>
-                            <span class="pill">${release.channel}</span>
+                const tr = document.createElement('tr');
+                tr.className = 'hover:bg-blue-50/40';
+                tr.innerHTML = `
+                    <td class="px-6 py-5">
+                        <div class="flex items-start gap-3">
+                            <div class="flex h-11 w-11 items-center justify-center rounded-2xl bg-blue-100 text-blue-600">
+                                <i data-lucide="${release.channel === 'bot-server' ? 'bot' : 'file-up'}" class="h-5 w-5"></i>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-slate-900">${release.filename}</p>
+                                <div class="mt-1 flex flex-wrap gap-2 text-xs">
+                                    <span class="rounded-full bg-slate-100 px-2.5 py-1 font-semibold text-slate-600">${release.app_slug}</span>
+                                    <span class="rounded-full bg-amber-50 px-2.5 py-1 font-semibold text-amber-700">${release.channel}</span>
+                                </div>
+                                <p class="mt-2 text-xs text-slate-400">${release.notes || 'Khong co release note.'}</p>
+                            </div>
                         </div>
-                        <div class="release-version">v${release.version}</div>
-                    </div>
-                    <div class="release-meta">
-                        <div><strong>Published:</strong> ${release.published_at || '-'}</div>
-                        <div><strong>Size:</strong> ${(release.size / 1048576).toFixed(2)} MB</div>
-                        <div><strong>File:</strong> ${release.filename}</div>
-                        <div><strong>SHA256:</strong> ${release.sha256 || '-'}</div>
-                    </div>
-                    <p class="release-notes">${release.notes || 'Khong co release note.'}</p>
-                    <div class="release-actions">
-                        <a class="btn btn-primary" href="${release.download_url}">Download</a>
-                        <a class="btn" href="${release.latest_url}">Latest JSON</a>
-                        <button class="btn btn-danger" type="button" data-delete-url="${release.delete_url}" data-label="${release.app_slug}/${release.channel}">Delete</button>
-                    </div>
-                `;
-
-                releaseList.appendChild(article);
+                    </td>
+                    <td class="px-6 py-5 font-semibold text-slate-900">v${release.version}</td>
+                    <td class="px-6 py-5 text-sm text-slate-500">${(release.size / 1048576).toFixed(2)} MB</td>
+                    <td class="px-6 py-5 text-sm text-slate-500">${release.published_at || '-'}</td>
+                    <td class="px-6 py-5"><span class="rounded-full px-2.5 py-1 text-[11px] font-bold uppercase ${release.mandatory ? 'bg-rose-50 text-rose-700' : 'bg-emerald-50 text-emerald-700'}">${release.mandatory ? 'Mandatory' : 'Optional'}</span></td>
+                    <td class="px-6 py-5"><div class="flex justify-end gap-2">
+                        <a class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:text-blue-600" href="${release.download_url}"><i data-lucide="download" class="h-4 w-4"></i></a>
+                        <a class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-500 hover:text-slate-700" href="${release.latest_url}"><i data-lucide="file-json" class="h-4 w-4"></i></a>
+                        <button class="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-rose-100 text-rose-500 hover:bg-rose-50" type="button" data-delete-url="${release.delete_url}" data-label="${release.app_slug}/${release.channel}"><i data-lucide="trash-2" class="h-4 w-4"></i></button>
+                    </div></td>`;
+                tbody.appendChild(tr);
             });
-
-            releaseList.querySelectorAll('[data-delete-url]').forEach((button) => {
+            lucide.createIcons();
+            tbody.querySelectorAll('[data-delete-url]').forEach((button) => {
                 button.addEventListener('click', async () => {
-                    const label = button.dataset.label;
-                    if (!confirm('Xoa toan bo release cho ' + label + '?')) {
-                        return;
-                    }
-
+                    if (!confirm('Xoa toan bo release cho ' + button.dataset.label + '?')) return;
                     button.disabled = true;
-
                     try {
-                        const response = await fetch(button.dataset.deleteUrl, {
-                            method: 'DELETE',
-                            headers: {
-                                'Accept': 'application/json',
-                                'Authorization': 'Bearer ' + getToken(),
-                            },
-                        });
-
+                        const response = await fetch(button.dataset.deleteUrl, { method: 'DELETE', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
                         const payload = await parseResponse(response);
-
-                        if (!response.ok) {
-                            setStatus(listStatus, 'error', 'Xoa that bai. HTTP ' + response.status + '.');
-                            showOutput(uploadOutput, payload);
-                            return;
-                        }
-
-                        setStatus(listStatus, 'ok', 'Da xoa ' + label + '.');
+                        if (!response.ok) { setStatus(listStatus, 'error', 'Xoa that bai. HTTP ' + response.status + '.'); showOutput(ids('uploadOutput'), payload); return; }
+                        setStatus(listStatus, 'ok', 'Da xoa ' + button.dataset.label + '.');
                         await loadReleases();
                     } catch (error) {
                         setStatus(listStatus, 'error', 'Khong gui duoc request xoa.');
-                    } finally {
-                        button.disabled = false;
-                    }
+                        showOutput(ids('uploadOutput'), String(error));
+                    } finally { button.disabled = false; }
                 });
             });
         }
 
-        loginForm.addEventListener('submit', async (event) => {
+        ids('loginForm').addEventListener('submit', async (event) => {
             event.preventDefault();
-            loginBtn.disabled = true;
-            clearStatus(loginStatus);
-            hideOutput(loginOutput);
-
+            ids('loginBtn').disabled = true; clearStatus(loginStatus); hideOutput(ids('loginOutput'));
             try {
-                const response = await fetch(loginUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        email: document.getElementById('email').value.trim(),
-                        password: document.getElementById('password').value,
-                    }),
-                });
-
-                const payload = await parseResponse(response);
-                showOutput(loginOutput, payload);
-
-                if (!response.ok) {
-                    setStatus(loginStatus, 'error', 'Login that bai. HTTP ' + response.status + '.');
-                    return;
-                }
-
-                const token = payload?.user?.auth_token;
-                if (token) {
-                    document.getElementById('token').value = token;
-                }
-
-                sessionUser.textContent = payload?.user?.name || 'Da dang nhap';
-                sessionEmail.textContent = payload?.user?.email || 'Token da duoc cap.';
-                setStatus(loginStatus, 'ok', 'Dang nhap thanh cong. Token da duoc nap vao form upload.');
-                persistState();
-                await loadReleases();
+                const response = await fetch(loginUrl, { method: 'POST', headers: { Accept: 'application/json', 'Content-Type': 'application/json' }, body: JSON.stringify({ email: ids('email').value.trim(), password: ids('password').value }) });
+                const payload = await parseResponse(response); showOutput(ids('loginOutput'), payload);
+                if (!response.ok) { setStatus(loginStatus, 'error', 'Login that bai. HTTP ' + response.status + '.'); return; }
+                if (payload?.user?.auth_token) ids('token').value = payload.user.auth_token;
+                syncSession(payload); setStatus(loginStatus, 'ok', 'Dang nhap thanh cong. Token da duoc nap vao form upload.'); persistState(); await loadReleases();
             } catch (error) {
-                setStatus(loginStatus, 'error', 'Khong ket noi duoc toi API login.');
-                showOutput(loginOutput, String(error));
-            } finally {
-                loginBtn.disabled = false;
-            }
+                setStatus(loginStatus, 'error', 'Khong ket noi duoc toi API login.'); showOutput(ids('loginOutput'), String(error));
+            } finally { ids('loginBtn').disabled = false; }
         });
 
-        uploadForm.addEventListener('submit', async (event) => {
+        ids('uploadForm').addEventListener('submit', async (event) => {
             event.preventDefault();
-
-            const token = getToken();
-            const file = document.getElementById('file').files[0];
-
-            if (!token) {
-                setStatus(uploadStatus, 'error', 'Bearer Token la bat buoc.');
-                return;
-            }
-
-            if (!file) {
-                setStatus(uploadStatus, 'error', 'Chua chon file .exe.');
-                return;
-            }
-
-            uploadBtn.disabled = true;
-            clearStatus(uploadStatus);
-            hideOutput(uploadOutput);
-
+            if (!getToken()) { setStatus(uploadStatus, 'error', 'Bearer Token la bat buoc.'); return; }
+            if (!ids('file').files[0]) { setStatus(uploadStatus, 'error', 'Chua chon file .exe.'); return; }
+            ids('uploadBtn').disabled = true; clearStatus(uploadStatus); hideOutput(ids('uploadOutput'));
             const formData = new FormData();
-            formData.append('app_slug', document.getElementById('appSlug').value.trim());
-            formData.append('channel', document.getElementById('channel').value.trim() || 'app');
-            formData.append('version', document.getElementById('version').value.trim());
-            formData.append('notes', document.getElementById('notes').value);
-            formData.append('mandatory', document.getElementById('mandatory').value);
-            formData.append('file', file);
-
+            formData.append('app_slug', ids('appSlug').value.trim());
+            formData.append('channel', ids('channel').value.trim() || 'app');
+            formData.append('version', ids('version').value.trim());
+            formData.append('notes', ids('notes').value);
+            formData.append('mandatory', ids('mandatory').value);
+            formData.append('file', ids('file').files[0]);
             try {
-                const response = await fetch(publishUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Accept': 'application/json',
-                        'Authorization': 'Bearer ' + token,
-                    },
-                    body: formData,
-                });
-
-                const payload = await parseResponse(response);
-                showOutput(uploadOutput, payload);
-
-                if (!response.ok) {
-                    setStatus(uploadStatus, 'error', 'Upload that bai. HTTP ' + response.status + '.');
-                    return;
-                }
-
+                const response = await fetch(publishUrl, { method: 'POST', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() }, body: formData });
+                const payload = await parseResponse(response); showOutput(ids('uploadOutput'), payload);
+                if (!response.ok) { setStatus(uploadStatus, 'error', 'Upload that bai. HTTP ' + response.status + '.'); return; }
                 setStatus(uploadStatus, 'ok', 'Upload thanh cong.');
-                persistState();
-                uploadForm.reset();
-                document.getElementById('token').value = token;
-                document.getElementById('appSlug').value = payload?.release?.app_slug || '';
-                document.getElementById('channel').value = payload?.release?.channel || 'app';
-                document.getElementById('version').value = payload?.release?.version || '';
-                document.getElementById('notes').value = payload?.release?.notes || '';
-                document.getElementById('mandatory').value = payload?.release?.mandatory ? '1' : '0';
-                await loadReleases();
+                const token = getToken(); ids('uploadForm').reset(); ids('token').value = token;
+                ids('appSlug').value = payload?.release?.app_slug || ''; ids('channel').value = payload?.release?.channel || 'app';
+                ids('version').value = payload?.release?.version || ''; ids('notes').value = payload?.release?.notes || '';
+                ids('mandatory').value = payload?.release?.mandatory ? '1' : '0'; persistState(); await loadReleases();
             } catch (error) {
-                setStatus(uploadStatus, 'error', 'Khong gui duoc request upload.');
-                showOutput(uploadOutput, String(error));
-            } finally {
-                uploadBtn.disabled = false;
-            }
+                setStatus(uploadStatus, 'error', 'Khong gui duoc request upload.'); showOutput(ids('uploadOutput'), String(error));
+            } finally { ids('uploadBtn').disabled = false; }
         });
 
-        document.querySelectorAll('[data-channel]').forEach((button) => {
-            button.addEventListener('click', () => {
-                channelInput.value = button.dataset.channel;
-                persistState();
-            });
-        });
-
-        refreshBtn.addEventListener('click', async () => {
-            try {
-                await loadReleases();
-            } catch (error) {
-                setStatus(listStatus, 'error', 'Refresh that bai.');
-            }
-        });
-
+        document.querySelectorAll('[data-channel]').forEach((button) => button.addEventListener('click', () => { ids('channel').value = button.dataset.channel; persistState(); }));
+        ids('refreshBtn').addEventListener('click', () => loadReleases().catch(() => setStatus(listStatus, 'error', 'Refresh that bai.')));
+        ids('loginForm').addEventListener('input', persistState);
+        ids('uploadForm').addEventListener('input', persistState);
         hydrateState();
-        if (getToken()) {
-            loadReleases().catch(() => {
-                setStatus(listStatus, 'error', 'Khong tai duoc release luc khoi dong.');
-            });
-        }
-        uploadForm.addEventListener('input', persistState);
-        loginForm.addEventListener('input', persistState);
+        if (getToken()) loadReleases().catch(() => setStatus(listStatus, 'error', 'Khong tai duoc release luc khoi dong.'));
+        lucide.createIcons();
     </script>
 </body>
 </html>

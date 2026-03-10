@@ -16,9 +16,9 @@ class AppUpdateController extends Controller
     public function dashboard(): View
     {
         return view('app-updates.dashboard', [
-            'listUrl' => route('admin.app-updates.index'),
-            'publishUrl' => route('admin.app-updates.publish'),
-            'loginUrl' => url('/api/login'),
+            'listUrl' => '/api/admin/app-updates',
+            'publishUrl' => '/api/admin/app-updates/publish',
+            'loginUrl' => '/api/login',
         ]);
     }
 
@@ -73,7 +73,7 @@ class AppUpdateController extends Controller
                     'appSlug' => $appSlug,
                     'channel' => $channel,
                     'filename' => basename($payload['file_path']),
-                ]),
+                ], false),
             ],
         ]);
     }
@@ -118,7 +118,7 @@ class AppUpdateController extends Controller
                 'appSlug' => $appSlug,
                 'channel' => $channel,
                 'filename' => basename($path),
-            ]),
+            ], false),
         ], 201);
     }
 
@@ -185,17 +185,17 @@ class AppUpdateController extends Controller
             'file_path' => $payload['file_path'],
             'filename' => $filename,
             'latest_url' => $channel === self::DEFAULT_CHANNEL
-                ? route('app-updates.latest.default', ['appSlug' => $appSlug])
-                : route('app-updates.latest', ['appSlug' => $appSlug, 'channel' => $channel]),
+                ? route('app-updates.latest.default', ['appSlug' => $appSlug], false)
+                : route('app-updates.latest', ['appSlug' => $appSlug, 'channel' => $channel], false),
             'download_url' => route('app-updates.download', [
                 'appSlug' => $appSlug,
                 'channel' => $channel,
                 'filename' => $filename,
-            ]),
+            ], false),
             'delete_url' => route('admin.app-updates.destroy', [
                 'appSlug' => $appSlug,
                 'channel' => $channel,
-            ]),
+            ], false),
         ];
     }
 
