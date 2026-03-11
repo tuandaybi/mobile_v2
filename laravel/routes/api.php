@@ -105,6 +105,7 @@ Route::middleware(['auth:sanctum'])
         Route::get('app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
         Route::get('app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
         Route::post('app-updates/publish', [AppUpdateController::class, 'publish'])->name('app-updates.publish');
+        Route::post('app-updates/{appSlug}/{channel}/restore', [AppUpdateController::class, 'restore'])->name('app-updates.restore');
         Route::delete('app-updates/{appSlug}/{channel}', [AppUpdateController::class, 'destroy'])->name('app-updates.destroy');
 
         //Admin -> Backups

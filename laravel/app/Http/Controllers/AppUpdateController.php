@@ -48,12 +48,19 @@ class AppUpdateController extends Controller
                     return null;
                 }
 
+                $appSlug = $payload['app_slug'];
+                $channel = $payload['channel'];
+
                 return [
-                    'app_slug' => $payload['app_slug'],
-                    'channel' => $payload['channel'],
-                    'label' => $payload['app_slug'] . '/' . $payload['channel'],
+                    'app_slug' => $appSlug,
+                    'channel' => $channel,
+                    'label' => $appSlug . '/' . $channel,
                     'deleted_at' => $payload['deleted_at'] ?? null,
                     'purge_after' => $payload['purge_after'] ?? null,
+                    'restore_url' => route('admin.app-updates.restore', [
+                        'appSlug' => $appSlug,
+                        'channel' => $channel,
+                    ], false),
                 ];
             })
             ->filter()
@@ -62,6 +69,27 @@ class AppUpdateController extends Controller
 
         return response()->json([
             'trash' => $trash,
+        ]);
+    }
+
+    public function restore(string $appSlug, string $channel): JsonResponse
+    {
+        $this->purgeExpiredTrash();
+
+        $appSlug = $this->sanitizeSegment($appSlug, 'app_slug');
+        $channel = $this->sanitizeSegment($channel, 'channel');
+
+        $trashDir = $this->trashDir($appSlug, $channel);
+        $targetDir = self::ROOT_DIR . '/' . $appSlug . '/' . $channel;
+
+        abort_unless(Storage::disk('public')->exists($trashDir), 404, 'Khong tim thay release trong thung rac.');
+        abort_if(Storage::disk('public')->exists($targetDir), 409, 'Da ton tai ban phat hanh, khong the khoi phuc.');
+
+        File::ensureDirectoryExists(dirname(Storage::disk('public')->path($targetDir)));
+        File::moveDirectory(Storage::disk('public')->path($trashDir), Storage::disk('public')->path($targetDir));
+
+        return response()->json([
+            'message' => 'Da khoi phuc ban phat hanh.',
         ]);
     }
 
