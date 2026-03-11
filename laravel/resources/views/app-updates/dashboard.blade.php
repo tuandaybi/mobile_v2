@@ -616,6 +616,7 @@
             }));
             return true;
         }
+    </script>
 
 function statusBadge(release) {
             return release.mandatory
