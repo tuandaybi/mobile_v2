@@ -108,7 +108,7 @@
 
                 <div>
                     <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tệp EXE</label>
-                    <input id="file" type="file" accept=".exe" required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white cursor-pointer">
+                    <input id="file" type="file" accept=".exe,.zip" required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white cursor-pointer">
                 </div>
 
                 <div class="flex flex-wrap gap-3 pt-2">

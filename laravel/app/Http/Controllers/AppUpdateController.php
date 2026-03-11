@@ -152,14 +152,16 @@ class AppUpdateController extends Controller
             'version' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'mandatory' => ['nullable', 'boolean'],
-            'file' => ['required', 'file', 'mimes:exe', 'max:204800'],
+            // max in kilobytes → 500 MB, cho phép exe hoặc zip
+            'file' => ['required', 'file', 'mimes:exe,zip', 'max:512000'],
         ]);
 
         $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
         $channel = $this->sanitizeSegment($validated['channel'] ?? self::DEFAULT_CHANNEL, 'channel');
         $file = $request->file('file');
         $slugVersion = Str::slug($validated['version']);
-        $filename = "{$appSlug}-{$channel}-{$slugVersion}-" . now()->format('YmdHis') . '.exe';
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
+        $filename = "{$appSlug}-{$channel}-{$slugVersion}-" . now()->format('YmdHis') . '.' . $ext;
         $path = $file->storeAs($this->releasesDir($appSlug, $channel), $filename, 'public');
 
         $fullPath = Storage::disk('public')->path($path);
