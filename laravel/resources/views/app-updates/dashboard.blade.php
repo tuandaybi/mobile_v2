@@ -4,8 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Update Server</title>
-    <script src="https://cdn.tailwindcss.com"><</script>
-    <script src="https://unpkg.com/lucide@latest"><</script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         @import url('https://fonts.cdnfonts.com/css/sf-pro-display');
         body { font-family: 'SF Pro Display', sans-serif; background: linear-gradient(135deg, #cbd5e1 0%, #f8fafc 100%); background-attachment: fixed; overflow: hidden; }
@@ -239,7 +239,11 @@
                 ? `<span class="px-2 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full uppercase">Bat buoc</span>`
                 : `<span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase">Tuy chon</span>`;
         }
-        function fileIcon(channel) { return channel === 'bot-server' ? 'bot' : 'file-code'; }
+        function fileIcon(channel) {
+            if (channel === 'bot-server') return 'server';
+            if (channel === 'app') return 'file-code';
+            return 'file';
+        }
 
         function renderRecent() {
             document.getElementById('headerTitle').innerHTML = `<h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Gần đây</h2>`;
@@ -370,8 +374,6 @@
         hydrateState();
         loadData('recent').catch(() => showToast('Khong tai duoc du lieu', 'error'));
         renderIcons();
-    <</script>
-    <script src="https://unpkg.com/lucide@latest"><</script>
     <style>
         @import url('https://fonts.cdnfonts.com/css/sf-pro-display');
         body { font-family: 'SF Pro Display', sans-serif; background: linear-gradient(135deg, #cbd5e1 0%, #f8fafc 100%); background-attachment: fixed; overflow: hidden; }
