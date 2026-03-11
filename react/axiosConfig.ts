@@ -12,13 +12,7 @@ const api = axios.create({
 // Gắn token từ localStorage vào mọi request nếu có
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('auth_token');
-
-  // Chỉ đính kèm Bearer token cho các request upload file (FormData / multipart)
-  const isUpload =
-    config.data instanceof FormData ||
-    String(config.headers?.['Content-Type'] ?? '').includes('multipart/form-data');
-
-  if (token && isUpload) {
+  if (token) {
     config.headers = config.headers || {};
     config.headers.Authorization = `Bearer ${token}`;
   }

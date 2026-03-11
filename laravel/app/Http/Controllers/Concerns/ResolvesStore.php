@@ -39,7 +39,9 @@ trait ResolvesStore
             [, $storeIds] = $this->resolveUserAndStores($request);
         }
         if (empty($storeIds)) {
-            return null;
+            // Khi không đăng nhập, cho phép lấy store_id từ query hoặc mặc định 1
+            $fallback = (int) $request->input('store_id', 1);
+            return $fallback > 0 ? $fallback : null;
         }
 
         $candidate = (int) $request->input('store_id', 0);
