@@ -22,6 +22,7 @@ class AppUpdateController extends Controller
         return view('app-updates.dashboard', [
             'listUrl' => '/api/admin/app-updates',
             'publishUrl' => '/api/admin/app-updates/publish',
+            'trashUrl' => '/api/admin/app-updates/trash',
         ]);
     }
 
@@ -31,6 +32,36 @@ class AppUpdateController extends Controller
 
         return response()->json([
             'releases' => $this->releaseCollection()->values(),
+        ]);
+    }
+
+    public function trash(): JsonResponse
+    {
+        $this->purgeExpiredTrash();
+
+        $trash = collect(Storage::disk('public')->allFiles(self::TRASH_DIR))
+            ->filter(fn (string $path) => Str::endsWith($path, '/deleted.json'))
+            ->map(function (string $path) {
+                $payload = json_decode(Storage::disk('public')->get($path), true);
+
+                if (!is_array($payload) || empty($payload['app_slug']) || empty($payload['channel'])) {
+                    return null;
+                }
+
+                return [
+                    'app_slug' => $payload['app_slug'],
+                    'channel' => $payload['channel'],
+                    'label' => $payload['app_slug'] . '/' . $payload['channel'],
+                    'deleted_at' => $payload['deleted_at'] ?? null,
+                    'purge_after' => $payload['purge_after'] ?? null,
+                ];
+            })
+            ->filter()
+            ->sortByDesc('deleted_at')
+            ->values();
+
+        return response()->json([
+            'trash' => $trash,
         ]);
     }
 

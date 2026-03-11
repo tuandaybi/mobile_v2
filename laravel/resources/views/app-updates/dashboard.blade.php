@@ -22,7 +22,7 @@
     </style>
 </head>
 <body class="h-screen p-4 md:p-8">
-    <div id="app" class="max-w-7xl mx-auto h-full flex apple-glass rounded-[40px] shadow-2xl overflow-hidden relative border border-white/40" data-list-url="{{ $listUrl }}" data-publish-url="{{ $publishUrl }}">
+    <div id="app" class="max-w-[1500px] w-full mx-auto h-full flex apple-glass rounded-[40px] shadow-2xl overflow-hidden relative border border-white/40" data-list-url="{{ $listUrl }}" data-publish-url="{{ $publishUrl }}" data-trash-url="{{ $trashUrl }}">
         <aside class="w-20 md:w-64 border-r border-white/20 flex flex-col p-6 space-y-4">
             <div class="flex items-center gap-3 px-2 mb-8 text-blue-600">
                 <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><i data-lucide="layers"></i></div>
@@ -134,6 +134,7 @@
         const root = document.getElementById('app');
         const listUrl = root.dataset.listUrl;
         const publishUrl = root.dataset.publishUrl;
+        const trashUrl = root.dataset.trashUrl || '/api/admin/app-updates/trash';
         const stateKey = 'update-dashboard-state';
         let releases = [];
         let trash = [];
@@ -181,6 +182,21 @@
             const raw = await response.text();
             try { return JSON.parse(raw); } catch { return raw; }
         }
+        function showOutput(el, payload) {
+            if (!el) return;
+            el.classList.remove('hidden');
+            el.textContent = typeof payload === 'string' ? payload : JSON.stringify(payload, null, 2);
+        }
+        function hideOutput(el) {
+            if (!el) return;
+            el.classList.add('hidden');
+            el.textContent = '';
+        }
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            const parsed = new Date(dateStr);
+            return Number.isNaN(parsed.getTime()) ? dateStr : parsed.toLocaleDateString('vi-VN');
+        }
         function updateCounts() {
             const count = releases.length;
             const appCount = new Set(releases.map((item) => item.app_slug)).size;
@@ -190,25 +206,43 @@
             if (releaseCountAside) releaseCountAside.innerText = count;
             if (appCountAside) appCountAside.innerText = appCount;
         }
-        async function loadReleases() {
+        async function loadReleases(showError = true) {
             if (!getToken()) {
                 releases = [];
-                trash = [];
-                renderCurrentTab();
-                showToast('Nhập mã Bearer để tải dữ liệu', 'error');
-                return;
+                updateCounts();
+                if (showError) showToast('Nh\u1eadp m\u00e3 Bearer \u0111\u1ec3 t\u1ea3i d\u1eef li\u1ec7u', 'error');
+                return false;
             }
             const response = await fetch(listUrl, { headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
             const payload = await parseResponse(response);
             if (!response.ok) {
-                showToast('Không tải được dữ liệu. HTTP ' + response.status, 'error');
-                return;
+                if (showError) showToast('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u. HTTP ' + response.status, 'error');
+                return false;
             }
             releases = payload.releases || [];
             updateCounts();
-            renderCurrentTab();
+            return true;
         }
-        function statusBadge(release) {
+        async function loadTrash(showError = false) {
+            if (!getToken()) {
+                trash = [];
+                return false;
+            }
+            const response = await fetch(trashUrl, { headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
+            const payload = await parseResponse(response);
+            if (!response.ok) {
+                if (showError) showToast('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c th\u00f9ng r\u00e1c. HTTP ' + response.status, 'error');
+                return false;
+            }
+            trash = (payload.trash || []).map((item) => ({
+                label: item.label || `${item.app_slug}/${item.channel}`,
+                deletedAt: formatDate(item.deleted_at),
+                purgeAfter: formatDate(item.purge_after),
+            }));
+            return true;
+        }
+
+function statusBadge(release) {
             return release.mandatory
                 ? `<span class="px-2 py-1 bg-rose-100 text-rose-700 text-[10px] font-bold rounded-full uppercase">Bắt buộc</span>`
                 : `<span class="px-2 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-full uppercase">Tùy chọn</span>`;
@@ -220,7 +254,7 @@
             document.getElementById('headerTitle').innerHTML = `<h2 class="text-3xl font-extrabold text-gray-900 tracking-tight">Gần đây</h2>`;
             let html = `<div class="apple-glass rounded-[35px] overflow-hidden shadow-xl border border-white/40 fade-in"><table class="w-full text-left"><thead class="bg-white/30 border-b border-white/20 text-[10px] uppercase tracking-widest text-gray-400 font-bold"><tr><th class="px-8 py-5">Tệp</th><th class="px-8 py-5">Ngày tải</th><th class="px-8 py-5 text-center">Kích thước</th><th class="px-8 py-5 text-center">Trạng thái</th><th class="px-8 py-5 text-right">Thao tác</th></tr></thead><tbody class="divide-y divide-white/20">`;
             releases.forEach((f) => {
-                html += `<tr class="hover:bg-white/40 group transition"><td class="px-8 py-5 flex items-center gap-4"><div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-blue-500"><i data-lucide="${fileIcon(f.channel)}"></i></div><div><p class="font-bold text-gray-900">${f.filename}</p><span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase">${f.app_slug} / ${f.channel}</span><p class="text-[10px] text-gray-400 mt-1">v${f.version}</p></div></td><td class="px-8 py-5 text-sm text-gray-500 font-medium">${f.published_at || '-'}</td><td class="px-8 py-5 text-center text-emerald-600 font-bold text-sm">${(f.size / 1048576).toFixed(2)} MB</td><td class="px-8 py-5 text-center">${statusBadge(f)}</td><td class="px-8 py-5 text-right"><div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="copyLink('${f.download_url}')" class="w-9 h-9 rounded-full bg-white text-gray-400 hover:text-gray-900 flex items-center justify-center shadow-sm border border-gray-100"><i data-lucide="copy" class="w-4 h-4"></i></button><a href="${f.download_url}" class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition"><i data-lucide="download" class="w-4 h-4"></i></a><button onclick="moveToTrash('${f.delete_url}', '${f.app_slug}/${f.channel}')" class="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition shadow-sm"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></td></tr>`;
+                html += `<tr class="hover:bg-white/40 group transition"><td class="px-8 py-5 flex items-center gap-4 min-w-[320px]"><div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-blue-500"><i data-lucide="${fileIcon(f.channel)}"></i></div><div><p class="font-bold text-gray-900 truncate max-w-[420px]" title="${f.filename}">${f.filename}</p><span class="text-[10px] bg-blue-100 text-blue-600 px-2 py-0.5 rounded-full font-bold uppercase">${f.app_slug} / ${f.channel}</span><p class="text-[10px] text-gray-400 mt-1">v${f.version}</p></div></td><td class="px-8 py-5 text-sm text-gray-500 font-medium whitespace-nowrap">${f.published_at || '-'}</td><td class="px-8 py-5 text-center text-emerald-600 font-bold text-sm">${(f.size / 1048576).toFixed(2)} MB</td><td class="px-8 py-5 text-center">${statusBadge(f)}</td><td class="px-8 py-5 text-right"><div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="copyLink('${f.download_url}')" class="w-9 h-9 rounded-full bg-white text-gray-400 hover:text-gray-900 flex items-center justify-center shadow-sm border border-gray-100"><i data-lucide="copy" class="w-4 h-4"></i></button><a href="${f.latest_url}" target="_blank" rel="noopener" class="w-9 h-9 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center hover:bg-amber-500 hover:text-white transition shadow-sm"><i data-lucide="file-text" class="w-4 h-4"></i></a><a href="${f.download_url}" class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition"><i data-lucide="download" class="w-4 h-4"></i></a><button onclick="moveToTrash('${f.delete_url}', '${f.app_slug}/${f.channel}')" class="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition shadow-sm"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></td></tr>`;
             });
             if (!releases.length) html += `<tr><td colspan="5" class="px-8 py-20 text-center text-gray-400 font-bold">Chưa có bản phát hành nào</td></tr>`;
             document.getElementById('mainContent').innerHTML = html + `</tbody></table></div>`;
@@ -246,7 +280,7 @@
             const items = releases.filter((item) => item.app_slug === slug);
             let html = `<button onclick="renderProjects()" class="flex items-center gap-2 text-blue-600 font-bold mb-6 hover:underline transition"><i data-lucide="chevron-left" class="w-5 h-5"></i> Quay lại</button><div class="apple-glass rounded-[35px] overflow-hidden shadow-xl border border-white/40 fade-in"><table class="w-full text-left"><thead class="bg-white/30 border-b border-white/20 text-[10px] uppercase tracking-widest text-gray-400 font-bold"><tr><th class="px-8 py-5">Tên tệp</th><th class="px-8 py-5">Ngày tải</th><th class="px-8 py-5 text-center">JSON</th><th class="px-8 py-5 text-right">Thao tác</th></tr></thead><tbody class="divide-y divide-white/20">`;
             items.forEach((f) => {
-                html += `<tr class="hover:bg-white/40 transition group"><td class="px-8 py-5 flex items-center gap-4"><div class="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-blue-500"><i data-lucide="${fileIcon(f.channel)}"></i></div><div><p class="font-bold text-gray-900">${f.filename}</p><p class="text-[10px] text-blue-600 font-bold uppercase">${f.channel} / phiên bản ${f.version}</p></div></td><td class="px-8 py-5 text-sm text-gray-500 font-semibold">${f.published_at || '-'}</td><td class="px-8 py-5 text-center"><a href="${f.latest_url}" class="text-blue-600 font-bold text-sm hover:underline">Mở</a></td><td class="px-8 py-5 text-right"><div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="copyLink('${f.download_url}')" class="w-9 h-9 rounded-full bg-white text-gray-400 hover:text-gray-900 flex items-center justify-center shadow-sm border border-gray-100"><i data-lucide="copy" class="w-4 h-4"></i></button><a href="${f.download_url}" class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition shadow-sm"><i data-lucide="download" class="w-4 h-4"></i></a><button onclick="moveToTrash('${f.delete_url}', '${f.app_slug}/${f.channel}')" class="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition shadow-sm"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></td></tr>`;
+                html += `<tr class="hover:bg-white/40 transition group"><td class="px-8 py-5 flex items-center gap-4 min-w-[320px]"><div class="w-10 h-10 bg-white shadow-sm rounded-xl flex items-center justify-center text-blue-500"><i data-lucide="${fileIcon(f.channel)}"></i></div><div><p class="font-bold text-gray-900 truncate max-w-[420px]" title="${f.filename}">${f.filename}</p><p class="text-[10px] text-blue-600 font-bold uppercase">${f.channel} / phiên bản ${f.version}</p></div></td><td class="px-8 py-5 text-sm text-gray-500 font-semibold whitespace-nowrap">${f.published_at || '-'}</td><td class="px-8 py-5 text-center"><a href="${f.latest_url}" target="_blank" rel="noopener" class="text-blue-600 font-bold text-sm hover:underline">Mở</a></td><td class="px-8 py-5 text-right"><div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition"><button onclick="copyLink('${f.download_url}')" class="w-9 h-9 rounded-full bg-white text-gray-400 hover:text-gray-900 flex items-center justify-center shadow-sm border border-gray-100"><i data-lucide="copy" class="w-4 h-4"></i></button><a href="${f.download_url}" class="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center hover:bg-blue-600 hover:text-white transition shadow-sm"><i data-lucide="download" class="w-4 h-4"></i></a><button onclick="moveToTrash('${f.delete_url}', '${f.app_slug}/${f.channel}')" class="w-9 h-9 rounded-full bg-rose-50 text-rose-500 flex items-center justify-center hover:bg-rose-500 hover:text-white transition shadow-sm"><i data-lucide="trash-2" class="w-4 h-4"></i></button></div></td></tr>`;
             });
             if (!items.length) html += `<tr><td colspan="4" class="px-8 py-20 text-center text-gray-400 font-bold">Không có tệp nào</td></tr>`;
             document.getElementById('mainContent').innerHTML = html + `</tbody></table></div>`;
@@ -276,25 +310,27 @@
             else if (tab === 'trash') renderTrash();
             else renderRecent();
         }
+        async function loadData(forceTab) {
+            const activeTab = forceTab || document.querySelector('.nav-btn.active')?.id?.replace('btn-', '') || 'recent';
+            await Promise.all([loadReleases(), loadTrash()]);
+            showTab(activeTab);
+        }
+
         async function moveToTrash(deleteUrl, label) {
-            if (!getToken()) { showToast('Không thể xóa khi chưa có mã token', 'error'); return; }
-            if (!confirm('Đưa bản phát hành ' + label + ' vào thùng rác?')) return;
+            if (!getToken()) { showToast('C\u1ea7n c\u00f3 token Bearer \u0111\u1ec3 x\u00f3a', 'error'); return; }
+            if (!confirm('\u0110\u01b0a b\u1ea3n ph\u00e1t h\u00e0nh ' + label + ' v\u00e0o th\u00f9ng r\u00e1c?')) return;
             const response = await fetch(deleteUrl, { method: 'DELETE', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
             const payload = await parseResponse(response);
-            if (!response.ok) { showToast('Xóa thất bại', 'error'); return; }
-            trash.unshift({
-                label,
-                deletedAt: new Date().toLocaleDateString('vi-VN'),
-                purgeAfter: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString('vi-VN'),
-            });
-            await loadReleases();
-            showToast(payload.message || 'Đã chuyển vào thùng rác');
+            if (!response.ok) { showToast((payload && payload.message) || 'X\u00f3a th\u1ea5t b\u1ea1i', 'error'); return; }
+            await loadData('trash');
+            showToast((payload && payload.message) || '\u0110\u00e3 chuy\u1ec3n v\u00e0o th\u00f9ng r\u00e1c');
         }
+
         function copyLink(link) {
             navigator.clipboard.writeText(link);
             showToast('Đã sao chép liên kết!');
         }
-        const uploadEnabled = false;
+        const uploadEnabled = true;
         async function handleUpload(event) {
             event.preventDefault();
             if (!uploadEnabled) {
@@ -324,7 +360,7 @@
                 getEl('notes').value = payload?.release?.notes || '';
                 getEl('mandatory').value = payload?.release?.mandatory ? '1' : '0';
                 persistState();
-                await loadReleases();
+                await loadData('recent');
                 toggleModal(false);
                 showToast(payload.message || 'Tải lên thành công!');
             } catch (error) {
@@ -338,10 +374,10 @@
         document.getElementById('uploadForm').addEventListener('input', persistState);
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) {
-            refreshBtn.addEventListener('click', () => loadReleases().catch(() => showToast('Làm mới thất bại', 'error')));
+            refreshBtn.addEventListener('click', () => loadData().catch(() => showToast('L\u00e0m m\u1edbi th\u1ea5t b\u1ea1i', 'error')));
         }
         hydrateState();
-        loadReleases().finally(() => showTab('recent'));
+        loadData('recent').catch(() => showToast('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u', 'error'));
         renderIcons();
     </script>
 </body>
