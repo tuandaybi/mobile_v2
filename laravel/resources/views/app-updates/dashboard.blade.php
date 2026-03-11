@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DevCenter - Bản phát hành đầy đủ</title>
+    <title>Update Server</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -26,7 +26,7 @@
         <aside class="w-20 md:w-64 border-r border-white/20 flex flex-col p-6 space-y-4">
             <div class="flex items-center gap-3 px-2 mb-8 text-blue-600">
                 <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><i data-lucide="layers"></i></div>
-                <span class="hidden md:block font-bold text-xl tracking-tighter text-gray-900 uppercase">DevCenter</span>
+                <span class="hidden md:block font-bold text-xl tracking-tighter text-gray-900 uppercase">File Server</span>
             </div>
             <nav class="space-y-2 flex-1">
                 <button id="btn-recent" onclick="showTab('recent')" class="nav-btn w-full flex items-center gap-3 p-3 text-gray-500 hover:bg-white/30 rounded-2xl font-bold transition">
@@ -78,8 +78,8 @@
 
             <form id="uploadForm" class="space-y-5">
                 <div>
-                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Mã Bearer</label>
-                    <input id="token" type="password" placeholder="49|..." required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm">
+                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Security Coded</label>
+                    <input id="token" type="password" placeholder="..." required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm">
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -116,7 +116,6 @@
                         <i data-lucide="upload" class="w-4 h-4"></i>
                         Tải bản phát hành
                     </button>
-                    <button type="button" onclick="document.getElementById('channel').value='app'" class="rounded-2xl border border-white/60 bg-white/30 px-5 py-4 text-sm font-semibold text-slate-700 hover:bg-white/60 transition">Dùng app</button>
                 </div>
             </form>
             <pre id="uploadOutput" class="hidden mt-6 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100"></pre>
@@ -293,18 +292,21 @@ function statusBadge(release) {
             document.getElementById('mainContent').innerHTML = html + `</tbody></table></div>`;
             renderIcons();
         }
-        function renderTrash() {
-            document.getElementById('headerTitle').innerHTML = `<h2 class="text-3xl font-extrabold text-gray-900 tracking-tight text-rose-600 uppercase">Th?ng r?c</h2>`;
-            let html = `<div class="apple-glass rounded-[35px] overflow-hidden shadow-xl border border-rose-100 fade-in"><table class="w-full text-left"><thead class="bg-rose-50/50 border-b border-rose-100 text-[10px] uppercase tracking-widest text-rose-400 font-bold"><tr><th class="px-8 py-5">T?n t?p</th><th class="px-8 py-5 text-center">Ng?y x?a</th><th class="px-8 py-5 text-center">C?n l?i</th><th class="px-8 py-5 text-right">Kh?i ph?c</th></tr></thead><tbody class="divide-y divide-rose-50">`;
+                        function renderTrash() {
+            document.getElementById('headerTitle').innerHTML = `<h2 class="text-3xl font-extrabold text-gray-900 tracking-tight text-rose-600 uppercase">Thùng rác</h2>`;
+            let html = `<div class="apple-glass rounded-[35px] overflow-hidden shadow-xl border border-rose-100 fade-in"><table class="w-full text-left"><thead class="bg-rose-50/50 border-b border-rose-100 text-[10px] uppercase tracking-widest text-rose-400 font-bold"><tr><th class="px-8 py-5">Tên tệp</th><th class="px-8 py-5 text-center">Ngày xóa</th><th class="px-8 py-5 text-center">Còn lại</th><th class="px-8 py-5 text-right">Khôi phục</th></tr></thead><tbody class="divide-y divide-rose-50">`;
             trash.forEach((f) => {
                 const days = daysLeft(f.purgeAfterRaw);
-                html += `<tr class="hover:bg-rose-50/20 group transition"><td class="px-8 py-5 flex items-center gap-4"><div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-gray-400"><i data-lucide="file-x"></i></div><div><p class="font-bold text-gray-500 line-through">${f.label}</p><p class="text-[10px] text-gray-400 uppercase">${days === '-' ? 'Kh?ng x?c ??nh' : 'C?n ' + days + ' ng?y tr??c khi x?a v?nh vi?n'}</p></div></td><td class="px-8 py-5 text-center text-rose-400 font-bold text-sm uppercase">${f.deletedAt}</td><td class="px-8 py-5 text-center text-gray-600 font-bold text-sm uppercase">${days === '-' ? '-' : days + ' ng?y'}</td><td class="px-8 py-5 text-right"><button onclick="restoreFromTrash('${f.restoreUrl}')" class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold text-xs uppercase tracking-wide hover:bg-emerald-600 hover:text-white transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Kh?i ph?c</button></td></tr>`;
+                const daysLabel = days === '-' ? '-' : `${days} ngày`;
+                const desc = days === '-' ? 'Không xác định' : `Còn ${days} ngày trước khi xóa vĩnh viễn`;
+                html += `<tr class="hover:bg-rose-50/20 group transition"><td class="px-8 py-5 flex items-center gap-4"><div class="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-gray-400"><i data-lucide="file-x"></i></div><div><p class="font-bold text-gray-500 line-through">${f.label}</p><p class="text-[10px] text-gray-400 uppercase">${desc}</p></div></td><td class="px-8 py-5 text-center text-rose-400 font-bold text-sm uppercase">${f.deletedAt}</td><td class="px-8 py-5 text-center text-gray-600 font-bold text-sm uppercase">${daysLabel}</td><td class="px-8 py-5 text-right"><button onclick="restoreFromTrash('${f.restoreUrl}')" class="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-emerald-200 bg-emerald-50 text-emerald-700 font-bold text-xs uppercase tracking-wide hover:bg-emerald-600 hover:text-white transition"><i data-lucide="rotate-ccw" class="w-4 h-4"></i>Khôi phục</button></td></tr>`;
             });
-            if (!trash.length) html = `<div class="text-center py-20 text-gray-400 font-bold">Th?ng r?c ?ang tr?ng</div>`;
+            if (!trash.length) html = `<div class="text-center py-20 text-gray-400 font-bold">Thùng rác đang trống</div>`;
             document.getElementById('mainContent').innerHTML = html + `</tbody></table></div>`;
             renderIcons();
         }
-        function setActiveTab(tab) {
+
+function setActiveTab(tab) {
             document.querySelectorAll('.nav-btn').forEach((b) => b.classList.remove('active', 'text-blue-600', 'bg-white/60'));
             document.getElementById(`btn-${tab}`).classList.add('active');
         }
@@ -395,6 +397,6 @@ function statusBadge(release) {
         hydrateState();
         loadData('recent').catch(() => showToast('Kh\u00f4ng t\u1ea3i \u0111\u01b0\u1ee3c d\u1eef li\u1ec7u', 'error'));
         renderIcons();
-    </script>
+/script>
 </body>
 </html>

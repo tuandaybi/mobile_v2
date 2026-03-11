@@ -268,9 +268,11 @@ class AppUpdateController extends Controller
             'published_at' => $payload['published_at'] ?? null,
             'file_path' => $payload['file_path'],
             'filename' => $filename,
-            'latest_url' => $channel === self::DEFAULT_CHANNEL
-                ? route('app-updates.latest.default', ['appSlug' => $appSlug], false)
-                : route('app-updates.latest', ['appSlug' => $appSlug, 'channel' => $channel], false),
+            'latest_url' => route('app-updates.latest', [
+                'appSlug' => $appSlug,
+                'channel' => $channel,
+            ], false),
+            'legacy_latest_url' => route('app-updates.latest.default', ['appSlug' => $appSlug], false),
             'download_url' => route('app-updates.download', [
                 'appSlug' => $appSlug,
                 'channel' => $channel,
