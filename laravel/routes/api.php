@@ -18,13 +18,15 @@ Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:
 Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])->middleware('auth:sanctum');
 
-//Zalo Webhook
-Route::post('/zalo/webhook', [ZaloWebhookController::class, 'handle']);
-
 Route::get('/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
 Route::get('/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
 Route::get('/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
 Route::get('/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
+// App updates
+Route::get('app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
+Route::get('app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
+Route::post('app-updates/{appSlug}/{channel}/restore', [AppUpdateController::class, 'restore'])->name('app-updates.restore');
+//Route::delete('app-updates/{appSlug}/{channel}', [AppUpdateController::class, 'destroy'])->name('app-updates.destroy');
 
 Route::middleware('auth:sanctum')->group(function () {
     // Profile
@@ -76,6 +78,8 @@ Route::middleware('auth:sanctum')->group(function () {
     // Purchase Invoices
     //Route::apiResource('purchase-invoices', PurchaseInvoiceController::class)->except(['create','edit']);
 
+    Route::post('app-updates/publish', [AppUpdateController::class, 'publish'])->name('app-updates.publish');
+
 });
 
 Route::middleware(['auth:sanctum'])
@@ -101,12 +105,7 @@ Route::middleware(['auth:sanctum'])
         //Admin -> Colors
         Route::apiResource('colors', ColorController::class);
 
-        // Admin -> App updates
-        Route::get('app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
-        Route::get('app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
-        Route::post('app-updates/publish', [AppUpdateController::class, 'publish'])->name('app-updates.publish');
-        Route::post('app-updates/{appSlug}/{channel}/restore', [AppUpdateController::class, 'restore'])->name('app-updates.restore');
-        Route::delete('app-updates/{appSlug}/{channel}', [AppUpdateController::class, 'destroy'])->name('app-updates.destroy');
+
 
         //Admin -> Backups
         Route::get('backups', [BackupController::class, 'index']);
