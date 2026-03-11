@@ -78,8 +78,8 @@
 
             <form id="uploadForm" class="space-y-5">
                 <div>
-                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Security Code</label>
-                    <input id="token" type="password" placeholder="..." required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm">
+                    <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Security Code (chỉ dùng khi upload)</label>
+                    <input id="token" type="password" placeholder="..." class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm">
                 </div>
 
                 <div class="grid gap-4 sm:grid-cols-2">
@@ -207,13 +207,7 @@
             if (appCountAside) appCountAside.innerText = appCount;
         }
         async function loadReleases(showError = true) {
-            if (!getToken()) {
-                releases = [];
-                updateCounts();
-                if (showError) showToast('Nhập mã Bearer để tải dữ liệu', 'error');
-                return false;
-            }
-            const response = await fetch(listUrl, { headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
+            const response = await fetch(listUrl, { headers: { Accept: 'application/json' } });
             const payload = await parseResponse(response);
             if (!response.ok) {
                 if (showError) showToast('Không tải được dữ liệu. HTTP ' + response.status, 'error');
@@ -224,8 +218,7 @@
             return true;
         }
         async function loadTrash(showError = false) {
-            if (!getToken()) { trash = []; return false; }
-            const response = await fetch(trashUrl, { headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
+            const response = await fetch(trashUrl, { headers: { Accept: 'application/json' } });
             const payload = await parseResponse(response);
             if (!response.ok) {
                 if (showError) showToast('Không tải được thùng rác. HTTP ' + response.status, 'error');
@@ -320,17 +313,15 @@
             showTab(activeTab);
         }
         async function moveToTrash(deleteUrl, label) {
-            if (!getToken()) { showToast('Cần có token Bearer để xóa', 'error'); return; }
             if (!confirm('Đưa bản phát hành ' + label + ' vào thùng rác?')) return;
-            const response = await fetch(deleteUrl, { method: 'DELETE', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
+            const response = await fetch(deleteUrl, { method: 'DELETE', headers: { Accept: 'application/json' } });
             const payload = await parseResponse(response);
             if (!response.ok) { showToast((payload && payload.message) || 'Xóa thất bại', 'error'); return; }
             await loadData('trash');
             showToast((payload && payload.message) || 'Đã chuyển vào thùng rác');
         }
         async function restoreFromTrash(restoreUrl) {
-            if (!getToken()) { showToast('Cần có token Bearer để khôi phục', 'error'); return; }
-            const response = await fetch(restoreUrl, { method: 'POST', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() } });
+            const response = await fetch(restoreUrl, { method: 'POST', headers: { Accept: 'application/json' } });
             const payload = await parseResponse(response);
             if (!response.ok) { showToast((payload && payload.message) || 'Khôi phục thất bại', 'error'); return; }
             await loadData('trash');
@@ -351,10 +342,16 @@
             formData.append('notes', getEl('notes').value);
             formData.append('mandatory', getEl('mandatory').value);
             formData.append('file', getEl('file').files[0]);
+            const token = getToken();
+            if (!token) {
+                showToast('Nhập Security Code trước khi upload', 'error');
+                getEl('uploadBtn').disabled = false;
+                return;
+            }
             try {
                 const response = await fetch(publishUrl, {
                     method: 'POST',
-                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() },
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + token },
                     body: formData,
                     mode: 'cors',
                 });
@@ -365,7 +362,6 @@
                     showToast(msg, 'error');
                     return;
                 }
-                const token = getToken();
                 getEl('uploadForm').reset();
                 getEl('token').value = token;
                 getEl('appSlug').value = payload?.release?.app_slug || '';
