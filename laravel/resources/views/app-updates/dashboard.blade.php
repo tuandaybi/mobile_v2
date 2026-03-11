@@ -130,9 +130,10 @@
 
     <script>
         const root = document.getElementById('app');
-        const listUrl = root.dataset.listUrl;
-        const publishUrl = root.dataset.publishUrl;
-        const trashUrl = root.dataset.trashUrl || '/api/admin/app-updates/trash';
+        const originBase = window.location.origin;
+        const listUrl = new URL(root.dataset.listUrl, originBase).href;
+        const publishUrl = new URL(root.dataset.publishUrl, originBase).href;
+        const trashUrl = new URL(root.dataset.trashUrl || '/api/admin/app-updates/trash', originBase).href;
         const stateKey = 'update-dashboard-state';
         let releases = [];
         let trash = [];
@@ -346,7 +347,7 @@
             formData.append('mandatory', getEl('mandatory').value);
             formData.append('file', getEl('file').files[0]);
             try {
-                const response = await fetch(publishUrl, { method: 'POST', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() }, body: formData });
+                const response = await fetch(publishUrl, { method: 'POST', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() }, body: formData, mode: 'cors' });
                 const payload = await parseResponse(response);
                 showOutput(getEl('uploadOutput'), payload);
                 if (!response.ok) { showToast('Upload thất bại. HTTP ' + response.status, 'error'); return; }
