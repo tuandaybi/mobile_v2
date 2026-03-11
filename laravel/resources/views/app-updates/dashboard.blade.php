@@ -131,9 +131,14 @@
     <script>
         const root = document.getElementById('app');
         const originBase = window.location.origin;
-        const listUrl = new URL(root.dataset.listUrl, originBase).href;
-        const publishUrl = new URL(root.dataset.publishUrl, originBase).href;
-        const trashUrl = new URL(root.dataset.trashUrl || '/api/admin/app-updates/trash', originBase).href;
+        const resolveUrl = (u, fallback) => {
+            if (!u) return fallback;
+            if (/^https?:\/\//i.test(u)) return u;
+            return new URL(u, originBase).href;
+        };
+        const listUrl = resolveUrl(root.dataset.listUrl, '/api/admin/app-updates');
+        const publishUrl = resolveUrl(root.dataset.publishUrl, '/api/admin/app-updates/publish');
+        const trashUrl = resolveUrl(root.dataset.trashUrl || '/api/admin/app-updates/trash', '/api/admin/app-updates/trash');
         const stateKey = 'update-dashboard-state';
         let releases = [];
         let trash = [];
@@ -347,10 +352,19 @@
             formData.append('mandatory', getEl('mandatory').value);
             formData.append('file', getEl('file').files[0]);
             try {
-                const response = await fetch(publishUrl, { method: 'POST', headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() }, body: formData, mode: 'cors' });
+                const response = await fetch(publishUrl, {
+                    method: 'POST',
+                    headers: { Accept: 'application/json', Authorization: 'Bearer ' + getToken() },
+                    body: formData,
+                    mode: 'cors',
+                });
                 const payload = await parseResponse(response);
                 showOutput(getEl('uploadOutput'), payload);
-                if (!response.ok) { showToast('Upload thất bại. HTTP ' + response.status, 'error'); return; }
+                if (!response.ok) {
+                    const msg = (payload && payload.message) ? payload.message : 'Upload thất bại. HTTP ' + response.status;
+                    showToast(msg, 'error');
+                    return;
+                }
                 const token = getToken();
                 getEl('uploadForm').reset();
                 getEl('token').value = token;
@@ -365,7 +379,7 @@
                 showToast(payload.message || 'Upload thành công');
             } catch (error) {
                 showOutput(getEl('uploadOutput'), String(error));
-                showToast('Không gửi được yêu cầu upload', 'error');
+                showToast('Không gửi được yêu cầu upload (network error)', 'error');
             } finally {
                 getEl('uploadBtn').disabled = false;
             }
