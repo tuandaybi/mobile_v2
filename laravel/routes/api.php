@@ -23,7 +23,7 @@ Route::get('/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest
 Route::get('/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
 Route::get('/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
 // App updates
-Route::prefix('admin')->name('admin.') {
+Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
     Route::get('app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
     Route::post('app-updates/{appSlug}/{channel}/restore', [AppUpdateController::class, 'restore'])->name('app-updates.restore');
