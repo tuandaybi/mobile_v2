@@ -19,10 +19,11 @@ Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])
     ->middleware(['auth:sanctum', 'permission:trangchinh']);
 
-Route::get('/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
-Route::get('/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
-Route::get('/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
-Route::get('/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
+
+Route::get('admin/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
+Route::get('admin/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
+Route::get('admin/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
+Route::get('admin/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
 // App updates
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'permission:admin.saoluu'])
