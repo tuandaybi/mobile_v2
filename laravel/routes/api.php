@@ -19,7 +19,8 @@ Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])
     ->middleware(['auth:sanctum', 'permission:trangchinh']);
 
-
+Route::get('admin/app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
+Route::get('admin/app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
 Route::get('admin/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
 Route::get('admin/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
 Route::get('admin/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
