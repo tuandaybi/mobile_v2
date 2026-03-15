@@ -20,7 +20,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./react:/app
-      - /app/node_modules
+    #  - /app/node_modules
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0"
     networks:
       - laravel

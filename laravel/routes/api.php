@@ -15,6 +15,7 @@ Route::get('/ping', fn() => response()->json(['ok' => true]));
 
 Route::post('/login', [AuthController::class, 'login']);
 Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:10,1');
+Route::post('/license/verify', [AuthController::class, 'verify'])->middleware('throttle:30,1');
 Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])
     ->middleware(['auth:sanctum', 'permission:trangchinh']);

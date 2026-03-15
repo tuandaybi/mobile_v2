@@ -271,4 +271,92 @@ class AuthController extends Controller
             'payload' => $data,
         ];
     }
+
+    public function verify(Request $request)
+    {
+        $request->validate(['key' => 'required|string']);
+    
+        $secret = config('app.renew_secret') ?? '';
+        if ($secret === '') {
+            return response()->json(['message' => 'Server chưa cấu hình renew_secret'], 500);
+        }
+    
+        // 1. Parse & verify chữ ký token
+        try {
+            $parsed = $this->parseTokenKey($request->input('key'), $secret);
+        } catch (\Exception $e) {
+            return response()->json([
+                'valid'   => false,
+                'reason'  => 'invalid_key',
+                'message' => $e->getMessage(),
+            ], 422);
+        }
+    
+        // 2. Tìm user theo email trong token
+        $user = \App\Models\User::where('email', $parsed['email'])->first();
+        if (!$user) {
+            return response()->json([
+                'valid'   => false,
+                'reason'  => 'user_not_found',
+                'message' => 'Không tìm thấy tài khoản.',
+            ], 404);
+        }
+    
+        // 3. Kiểm tra tài khoản có active không
+        if (!$user->is_active) {
+            return response()->json([
+                'valid'   => false,
+                'reason'  => 'inactive',
+                'message' => 'Tài khoản chưa được kích hoạt.',
+            ], 403);
+        }
+    
+        // 4. So khớp token_key lưu trong DB với key gửi lên
+        //    (chặn trường hợp key bị share / dùng key cũ đã bị thay)
+        if ($user->token_key !== $request->input('key')) {
+            return response()->json([
+                'valid'   => false,
+                'reason'  => 'key_mismatch',
+                'message' => 'Key không khớp tài khoản. Vui lòng gia hạn lại.',
+            ], 403);
+        }
+    
+        // 5. Kiểm tra hạn
+        $now     = now();
+        $expires = $parsed['expires']; // Carbon end-of-day
+        if ($now->greaterThan($expires)) {
+            return response()->json([
+                'valid'          => false,
+                'reason'         => 'expired',
+                'message'        => 'License đã hết hạn. Vui lòng gia hạn.',
+                'license'        => [
+                    'expires'       => $expires->toIso8601String(),
+                    'days_remaining' => 0,
+                ],
+            ], 403);
+        }
+    
+        // 6. Trả về thông tin hợp lệ
+        $daysRemaining = (int) $now->diffInDays($expires);
+    
+        $storeId   = $this->resolveStoreIdByUserId($user->id);
+        $store     = \Illuminate\Support\Facades\DB::table('stores')
+                        ->select('id', 'name')
+                        ->where('id', $storeId)
+                        ->first();
+    
+        return response()->json([
+            'valid'   => true,
+            'user'    => [
+                'id'         => $user->id,
+                'name'       => $user->name,
+                'email'      => $user->email,
+                'store_name' => $store->name ?? null,
+            ],
+            'license' => [
+                'expires'        => $expires->toIso8601String(),
+                'days_remaining' => $daysRemaining,
+            ],
+        ]);
+    }
 }
