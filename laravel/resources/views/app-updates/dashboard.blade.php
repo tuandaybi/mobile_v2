@@ -22,7 +22,8 @@
     </style>
 </head>
 <body class="h-screen p-4 md:p-8">
-    <div id="app" class="w-full mx-auto h-full flex apple-glass rounded-[40px] shadow-2xl overflow-hidden relative border border-white/40" data-list-url="{{ $listUrl }}" data-publish-url="{{ $publishUrl }}" data-trash-url="{{ $trashUrl }}">
+        <div id="app" class="w-full mx-auto h-full flex apple-glass rounded-[40px] shadow-2xl overflow-hidden relative border border-white/40" data-list-url="{{ $listUrl }}" data-publish-url="{{ $publishUrl }}" data-trash-url="{{ $trashUrl }}" data-request-upload-otp-url="/api/admin/app-updates/request-upload-otp">
+
         <aside class="w-20 md:w-64 border-r border-white/20 flex flex-col p-6 space-y-4">
             <div class="flex items-center gap-3 px-2 mb-8 text-blue-600">
                 <div class="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><i data-lucide="layers"></i></div>
@@ -106,9 +107,19 @@
                     <textarea id="notes" class="min-h-[100px] w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition">Phiên bản được tải lên từ bảng điều khiển cập nhật.</textarea>
                 </div>
 
-                <div>
+                                <div>
                     <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Tệp EXE</label>
                     <input id="file" type="file" accept=".exe,.zip" required class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 file:mr-4 file:rounded-xl file:border-0 file:bg-blue-600 file:px-4 file:py-2 file:font-semibold file:text-white cursor-pointer">
+                </div>
+
+                <div class="grid gap-4 sm:grid-cols-[1fr_auto] items-end">
+                    <div>
+                        <label class="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">OTP upload</label>
+                        <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-2xl border border-white/60 bg-white/40 px-4 py-3 outline-none focus:border-blue-400 transition shadow-sm">
+                    </div>
+                    <button id="requestUploadOtpBtn" type="button" class="rounded-2xl bg-amber-500 px-5 py-3 text-sm font-bold text-white shadow hover:bg-amber-600 transition uppercase tracking-wide">
+                        Gửi OTP
+                    </button>
                 </div>
 
                 <div class="flex flex-wrap gap-3 pt-2">
@@ -117,6 +128,7 @@
                         Tải bản phát hành
                     </button>
                 </div>
+
             </form>
             <pre id="uploadOutput" class="hidden mt-6 overflow-auto rounded-2xl bg-slate-950 p-4 text-xs text-slate-100"></pre>
             <button onclick="toggleModal(false)" class="absolute top-8 right-8 text-slate-400 hover:text-slate-900 transition"><i data-lucide="x"></i></button>
@@ -136,15 +148,19 @@
             if (/^https?:\/\//i.test(u)) return u;
             return new URL(u, originBase).href;
         };
-        const listUrl = resolveUrl(root.dataset.listUrl, '/api/admin/app-updates');
+                const listUrl = resolveUrl(root.dataset.listUrl, '/api/admin/app-updates');
         const publishUrl = resolveUrl(root.dataset.publishUrl, '/api/admin/app-updates/publish');
         const trashUrl = resolveUrl(root.dataset.trashUrl || '/api/admin/app-updates/trash', '/api/admin/app-updates/trash');
+        const requestUploadOtpUrl = resolveUrl(root.dataset.requestUploadOtpUrl, '/api/admin/app-updates/request-upload-otp');
+
         const stateKey = 'update-dashboard-state';
         let releases = [];
         let trash = [];
 
         const getEl = (id) => document.getElementById(id);
         const getToken = () => getEl('token').value.trim();
+        const getUploadOtp = () => getEl('uploadOtp').value.trim();
+
         const toggleModal = (show) => getEl('modalOverlay').classList.toggle('active', show);
         const renderIcons = () => window.lucide?.createIcons?.();
 
@@ -329,8 +345,58 @@
         }
         function copyLink(link) { navigator.clipboard.writeText(link); showToast('Đã sao chép liên kết'); }
 
-        const uploadEnabled = true;
+                const uploadEnabled = true;
+
+        async function requestUploadOtp() {
+            const token = getToken();
+            if (!token) {
+                showToast('Nhập Security Code trước khi gửi OTP upload', 'error');
+                return;
+            }
+
+            const appSlug = getEl('appSlug').value.trim();
+            const channel = getEl('channel').value.trim() || 'app';
+            const version = getEl('version').value.trim();
+
+            if (!appSlug || !version) {
+                showToast('Nhập app slug và version trước khi gửi OTP upload', 'error');
+                return;
+            }
+
+            const btn = getEl('requestUploadOtpBtn');
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(requestUploadOtpUrl, {
+                    method: 'POST',
+                    headers: {
+                        Accept: 'application/json',
+                        Authorization: 'Bearer ' + token,
+                    },
+                    body: new URLSearchParams({
+                        app_slug: appSlug,
+                        channel,
+                        version,
+                    }),
+                });
+
+                const payload = await parseResponse(response);
+                if (!response.ok) {
+                    showToast((payload && payload.message) ? payload.message : 'Không gửi được OTP upload', 'error');
+                    return;
+                }
+
+                showToast(payload.message || 'Đã gửi OTP upload qua Telegram');
+                getEl('uploadOtp').focus();
+            } catch (error) {
+                showToast('Không gửi được OTP upload (network error)', 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
         async function handleUpload(event) {
+
             event.preventDefault();
             if (!uploadEnabled) { showToast('Chưa cho phép upload', 'error'); return; }
             getEl('uploadBtn').disabled = true;
@@ -340,14 +406,22 @@
             formData.append('channel', getEl('channel').value.trim() || 'app');
             formData.append('version', getEl('version').value.trim());
             formData.append('notes', getEl('notes').value);
-            formData.append('mandatory', getEl('mandatory').value);
+                        formData.append('mandatory', getEl('mandatory').value);
+            formData.append('otp', getUploadOtp());
             formData.append('file', getEl('file').files[0]);
             const token = getToken();
-            if (!token) {
+
+                        if (!token) {
                 showToast('Nhập Security Code trước khi upload', 'error');
                 getEl('uploadBtn').disabled = false;
                 return;
             }
+            if (!getUploadOtp()) {
+                showToast('Nhập OTP upload trước khi tải bản phát hành', 'error');
+                getEl('uploadBtn').disabled = false;
+                return;
+            }
+
             try {
                 const response = await fetch(publishUrl, {
                     method: 'POST',
@@ -362,8 +436,10 @@
                     showToast(msg, 'error');
                     return;
                 }
-                getEl('uploadForm').reset();
+                                getEl('uploadForm').reset();
                 getEl('token').value = token;
+                getEl('uploadOtp').value = '';
+
                 getEl('appSlug').value = payload?.release?.app_slug || '';
                 getEl('channel').value = payload?.release?.channel || 'app';
                 getEl('version').value = payload?.release?.version || '';
@@ -381,8 +457,10 @@
             }
         }
 
-        document.getElementById('uploadForm').addEventListener('submit', handleUpload);
+                document.getElementById('uploadForm').addEventListener('submit', handleUpload);
         document.getElementById('uploadForm').addEventListener('input', persistState);
+        document.getElementById('requestUploadOtpBtn').addEventListener('click', requestUploadOtp);
+
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) refreshBtn.addEventListener('click', () => loadData().catch(() => showToast('Làm mới thất bại', 'error')));
         hydrateState();

@@ -31,6 +31,7 @@ Route::prefix('admin')
     ->middleware(['auth:sanctum', 'permission:admin.saoluu'])
     ->name('admin.')
     ->group(function () {
+        Route::post('app-updates/request-upload-otp', [AppUpdateController::class, 'requestUploadOtp'])->name('app-updates.request-upload-otp');
         Route::post('app-updates/publish', [AppUpdateController::class, 'publish'])->name('app-updates.publish');
         Route::post('app-updates/{appSlug}/{channel}/restore', [AppUpdateController::class, 'restore'])->name('app-updates.restore');
         Route::delete('app-updates/{appSlug}/{channel}', [AppUpdateController::class, 'destroy'])->name('app-updates.destroy');

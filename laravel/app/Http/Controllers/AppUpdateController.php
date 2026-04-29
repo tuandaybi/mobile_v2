@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Notifications\TelegramNotification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -32,6 +34,15 @@ class AppUpdateController extends Controller
 
         return response()->json([
             'releases' => $this->releaseCollection()->values(),
+        ]);
+    }
+
+    public function downloadPage(): View
+    {
+        $this->purgeExpiredTrash();
+
+        return view('app-updates.downloads', [
+            'files' => $this->releaseCollection()->values(),
         ]);
     }
 
@@ -133,12 +144,37 @@ class AppUpdateController extends Controller
                 'mandatory' => (bool) ($payload['mandatory'] ?? false),
                 'size' => (int) ($payload['size'] ?? 0),
                 'sha256' => $payload['sha256'] ?? null,
-                'download_url' => route('app-updates.download', [
-                    'appSlug' => $appSlug,
-                    'channel' => $channel,
-                    'filename' => basename($payload['file_path']),
-                ], false),
+                'download_url' => $this->downloadEntryUrl($appSlug, $channel, basename($payload['file_path'])),
             ],
+        ]);
+    }
+
+    public function requestUploadOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'app_slug' => ['required', 'string', 'max:100'],
+            'channel' => ['nullable', 'string', 'max:100'],
+            'version' => ['required', 'string', 'max:50'],
+        ]);
+
+        $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
+        $channel = $this->sanitizeSegment($validated['channel'] ?? self::DEFAULT_CHANNEL, 'channel');
+        $version = trim($validated['version']);
+        $otp = (string) random_int(100000, 999999);
+        $key = $this->uploadOtpCacheKey($request->ip(), $appSlug, $channel, $version);
+
+        Cache::put($key, [
+            'otp' => $otp,
+            'app_slug' => $appSlug,
+            'channel' => $channel,
+            'version' => $version,
+            'created_at' => now()->toIso8601String(),
+        ], now()->addMinutes(5));
+
+        TelegramNotification::send("OTP upload file: {$otp}\nApp: {$appSlug}/{$channel}\nVersion: {$version}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
+
+        return response()->json([
+            'message' => 'Da gui OTP upload qua Telegram. Ma co hieu luc trong 5 phut.',
         ]);
     }
 
@@ -152,12 +188,25 @@ class AppUpdateController extends Controller
             'version' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'mandatory' => ['nullable', 'boolean'],
+            'otp' => ['required', 'digits:6'],
             // max in kilobytes → 500 MB, cho phép exe hoặc zip
             'file' => ['required', 'file', 'mimes:exe,zip', 'max:512000'],
         ]);
 
         $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
         $channel = $this->sanitizeSegment($validated['channel'] ?? self::DEFAULT_CHANNEL, 'channel');
+        $version = trim($validated['version']);
+        $otpKey = $this->uploadOtpCacheKey($request->ip(), $appSlug, $channel, $version);
+        $cachedOtp = Cache::get($otpKey);
+
+        if (!is_array($cachedOtp) || !isset($cachedOtp['otp']) || $cachedOtp['otp'] !== $validated['otp']) {
+            return response()->json([
+                'message' => 'OTP upload khong dung hoac da het han.',
+            ], 422);
+        }
+
+        Cache::forget($otpKey);
+
         $file = $request->file('file');
         $slugVersion = Str::slug($validated['version']);
         $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
@@ -168,7 +217,7 @@ class AppUpdateController extends Controller
         $meta = [
             'app_slug' => $appSlug,
             'channel' => $channel,
-            'version' => $validated['version'],
+            'version' => $version,
             'notes' => $validated['notes'] ?? '',
             'mandatory' => (bool) ($validated['mandatory'] ?? false),
             'file_path' => $path,
@@ -182,11 +231,7 @@ class AppUpdateController extends Controller
         return response()->json([
             'message' => 'Da phat hanh ban cap nhat moi.',
             'release' => $this->normalizeRelease($meta),
-            'download_url' => route('app-updates.download', [
-                'appSlug' => $appSlug,
-                'channel' => $channel,
-                'filename' => basename($path),
-            ], false),
+            'download_url' => $this->downloadEntryUrl($appSlug, $channel, basename($path)),
         ], 201);
     }
 
@@ -236,6 +281,72 @@ class AppUpdateController extends Controller
         ]);
     }
 
+    public function requestDownloadOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'app_slug' => ['required', 'string', 'max:100'],
+            'channel' => ['required', 'string', 'max:100'],
+            'filename' => ['required', 'string', 'max:255'],
+        ]);
+
+        $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
+        $channel = $this->sanitizeSegment($validated['channel'], 'channel');
+        $filename = basename($validated['filename']);
+        $path = $this->releasesDir($appSlug, $channel) . '/' . $filename;
+
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
+
+        $otp = (string) random_int(100000, 999999);
+        $key = $this->downloadOtpCacheKey($request->ip(), $appSlug, $channel, $filename);
+
+        Cache::put($key, [
+            'otp' => $otp,
+            'app_slug' => $appSlug,
+            'channel' => $channel,
+            'filename' => $filename,
+            'created_at' => now()->toIso8601String(),
+        ], now()->addMinutes(5));
+
+        TelegramNotification::send("OTP tải file: {$otp}\nFile: {$filename}\nApp: {$appSlug}/{$channel}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
+
+        return response()->json([
+            'message' => 'Da gui OTP qua Telegram. Ma co hieu luc trong 5 phut.',
+        ]);
+    }
+
+    public function verifyDownloadOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'app_slug' => ['required', 'string', 'max:100'],
+            'channel' => ['required', 'string', 'max:100'],
+            'filename' => ['required', 'string', 'max:255'],
+            'otp' => ['required', 'digits:6'],
+        ]);
+
+        $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
+        $channel = $this->sanitizeSegment($validated['channel'], 'channel');
+        $filename = basename($validated['filename']);
+        $path = $this->releasesDir($appSlug, $channel) . '/' . $filename;
+
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
+
+        $key = $this->downloadOtpCacheKey($request->ip(), $appSlug, $channel, $filename);
+        $cached = Cache::get($key);
+
+        if (!is_array($cached) || !isset($cached['otp']) || $cached['otp'] !== $validated['otp']) {
+            return back()->withInput()->withErrors([
+                'otp' => 'OTP khong dung hoac da het han.',
+            ]);
+        }
+
+        Cache::forget($key);
+        $this->appendDownloadLog($request->ip(), $filename, $appSlug, $channel);
+
+        return Storage::disk('public')->download($path, $filename, [
+            'Content-Type' => 'application/octet-stream',
+        ]);
+    }
+
     private function releaseCollection()
     {
         return collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
@@ -275,11 +386,7 @@ class AppUpdateController extends Controller
                 'channel' => $channel,
             ], false),
             'legacy_latest_url' => route('app-updates.latest.default', ['appSlug' => $appSlug], false),
-            'download_url' => route('app-updates.download', [
-                'appSlug' => $appSlug,
-                'channel' => $channel,
-                'filename' => $filename,
-            ], false),
+            'download_url' => $this->downloadEntryUrl($appSlug, $channel, $filename),
             'delete_url' => route('admin.app-updates.destroy', [
                 'appSlug' => $appSlug,
                 'channel' => $channel,
@@ -319,6 +426,40 @@ class AppUpdateController extends Controller
     private function trashDir(string $appSlug, string $channel): string
     {
         return self::TRASH_DIR . '/' . $appSlug . '/' . $channel;
+    }
+
+    private function downloadEntryUrl(string $appSlug, string $channel, string $filename): string
+    {
+        return route('app-updates.downloads', [
+            'app_slug' => $appSlug,
+            'channel' => $channel,
+            'filename' => $filename,
+        ], false);
+    }
+
+    private function uploadOtpCacheKey(string $ip, string $appSlug, string $channel, string $version): string
+    {
+        return 'upload_otp:' . sha1($ip . '|' . $appSlug . '|' . $channel . '|' . $version);
+    }
+
+    private function downloadOtpCacheKey(string $ip, string $appSlug, string $channel, string $filename): string
+    {
+        return 'download_otp:' . sha1($ip . '|' . $appSlug . '|' . $channel . '|' . $filename);
+    }
+
+    private function appendDownloadLog(string $ip, string $filename, string $appSlug, string $channel): void
+    {
+        $line = sprintf(
+            "[%s] IP: %s | app: %s | channel: %s | file: %s%s",
+            now()->format('Y-m-d H:i:s'),
+            $ip,
+            $appSlug,
+            $channel,
+            $filename,
+            PHP_EOL
+        );
+
+        File::append(storage_path('logs/download.log'), $line);
     }
 
     private function purgeExpiredTrash(): void
