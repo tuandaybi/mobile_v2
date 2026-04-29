@@ -66,7 +66,7 @@
                         </div>
 
                         <div class="w-full lg:w-[360px] space-y-3">
-                            <form method="POST" action="{{ route('app-updates.request-otp') }}" class="space-y-3">
+                            <form method="POST" action="{{ route('app-updates.request-otp', [], false) }}" class="space-y-3">
                                 @csrf
                                 <input type="hidden" name="app_slug" value="{{ $file['app_slug'] }}">
                                 <input type="hidden" name="channel" value="{{ $file['channel'] }}">
@@ -80,7 +80,7 @@
                                 </button>
                             </form>
 
-                            <form method="POST" action="{{ route('app-updates.verify-otp') }}" class="space-y-3">
+                            <form method="POST" action="{{ route('app-updates.verify-otp', [], false) }}" class="space-y-3">
                                 @csrf
                                 <input type="hidden" name="app_slug" value="{{ $file['app_slug'] }}">
                                 <input type="hidden" name="channel" value="{{ $file['channel'] }}">
