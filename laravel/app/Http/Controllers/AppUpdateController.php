@@ -19,13 +19,7 @@ class AppUpdateController extends Controller
 
     public function dashboard(): View
     {
-        $this->purgeExpiredTrash();
-
-        return view('app-updates.dashboard', [
-            'listUrl' => '/api/admin/app-updates',
-            'publishUrl' => '/api/admin/app-updates/publish',
-            'trashUrl' => '/api/admin/app-updates/trash',
-        ]);
+        return $this->downloadPage();
     }
 
     public function index(): JsonResponse
@@ -43,6 +37,8 @@ class AppUpdateController extends Controller
 
         return view('app-updates.downloads', [
             'files' => $this->releaseCollection()->values(),
+            'publishUrl' => '/api/admin/app-updates/publish',
+            'requestUploadOtpUrl' => '/api/admin/app-updates/request-upload-otp',
         ]);
     }
 
@@ -430,7 +426,7 @@ class AppUpdateController extends Controller
 
     private function downloadEntryUrl(string $appSlug, string $channel, string $filename): string
     {
-        return route('app-updates.downloads', [
+        return route('app-updates.dashboard', [
             'app_slug' => $appSlug,
             'channel' => $channel,
             'filename' => $filename,
