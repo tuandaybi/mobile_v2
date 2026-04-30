@@ -39,6 +39,7 @@ class AppUpdateController extends Controller
             'files' => $this->releaseCollection()->values(),
             'publishUrl' => '/api/admin/app-updates/publish',
             'requestUploadOtpUrl' => '/api/admin/app-updates/request-upload-otp',
+            'deleteWithOtpUrl' => route('app-updates.delete-with-otp', [], false),
         ]);
     }
 
@@ -184,24 +185,29 @@ class AppUpdateController extends Controller
             'version' => ['required', 'string', 'max:50'],
             'notes' => ['nullable', 'string', 'max:2000'],
             'mandatory' => ['nullable', 'boolean'],
-            'otp' => ['required', 'digits:6'],
-            // max in kilobytes → 500 MB, cho phép exe hoặc zip
-            'file' => ['required', 'file', 'mimes:exe,zip', 'max:512000'],
+            'otp_protected' => ['nullable', 'boolean'],
+            'otp' => ['required_if:otp_protected,1', 'nullable', 'digits:6'],
+            // max in kilobytes → 500 MB, cho phép mọi loại tệp
+            'file' => ['required', 'file', 'max:512000'],
         ]);
 
         $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
         $channel = $this->sanitizeSegment($validated['channel'] ?? self::DEFAULT_CHANNEL, 'channel');
         $version = trim($validated['version']);
-        $otpKey = $this->uploadOtpCacheKey($request->ip(), $appSlug, $channel, $version);
-        $cachedOtp = Cache::get($otpKey);
+        $otpProtected = (bool) ($validated['otp_protected'] ?? true);
 
-        if (!is_array($cachedOtp) || !isset($cachedOtp['otp']) || $cachedOtp['otp'] !== $validated['otp']) {
-            return response()->json([
-                'message' => 'OTP upload khong dung hoac da het han.',
-            ], 422);
+        if ($otpProtected) {
+            $otpKey = $this->uploadOtpCacheKey($request->ip(), $appSlug, $channel, $version);
+            $cachedOtp = Cache::get($otpKey);
+
+            if (!is_array($cachedOtp) || !isset($cachedOtp['otp']) || $cachedOtp['otp'] !== ($validated['otp'] ?? null)) {
+                return response()->json([
+                    'message' => 'OTP upload khong dung hoac da het han.',
+                ], 422);
+            }
+
+            Cache::forget($otpKey);
         }
-
-        Cache::forget($otpKey);
 
         $file = $request->file('file');
         $slugVersion = Str::slug($validated['version']);
@@ -216,6 +222,7 @@ class AppUpdateController extends Controller
             'version' => $version,
             'notes' => $validated['notes'] ?? '',
             'mandatory' => (bool) ($validated['mandatory'] ?? false),
+            'otp_protected' => $otpProtected,
             'file_path' => $path,
             'size' => $file->getSize(),
             'sha256' => hash_file('sha256', $fullPath),
@@ -279,6 +286,12 @@ class AppUpdateController extends Controller
 
         abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
 
+        if (!$this->releaseRequiresOtp($appSlug, $channel, $filename)) {
+            return response()->json([
+                'message' => 'File nay khong yeu cau OTP.',
+            ]);
+        }
+
         $otp = (string) random_int(100000, 999999);
         $key = $this->downloadOtpCacheKey($request->ip(), $appSlug, $channel, $filename);
 
@@ -303,7 +316,7 @@ class AppUpdateController extends Controller
             'app_slug' => ['required', 'string', 'max:100'],
             'channel' => ['required', 'string', 'max:100'],
             'filename' => ['required', 'string', 'max:255'],
-            'otp' => ['required', 'digits:6'],
+            'otp' => ['nullable', 'digits:6'],
         ]);
 
         $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
@@ -313,20 +326,61 @@ class AppUpdateController extends Controller
 
         abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
 
-        $key = $this->downloadOtpCacheKey($request->ip(), $appSlug, $channel, $filename);
-        $cached = Cache::get($key);
+        if ($this->releaseRequiresOtp($appSlug, $channel, $filename)) {
+            $isValid = $this->consumeDownloadOtp($request->ip(), $appSlug, $channel, $filename, (string) ($validated['otp'] ?? ''));
 
-        if (!is_array($cached) || !isset($cached['otp']) || $cached['otp'] !== $validated['otp']) {
-            return back()->withInput()->withErrors([
-                'otp' => 'OTP khong dung hoac da het han.',
-            ]);
+            if (!$isValid) {
+                return back()->withInput()->withErrors([
+                    'otp' => 'OTP khong dung hoac da het han.',
+                ]);
+            }
         }
 
-        Cache::forget($key);
         $this->appendDownloadLog($request->ip(), $filename, $appSlug, $channel);
 
         return Storage::disk('public')->download($path, $filename, [
             'Content-Type' => 'application/octet-stream',
+        ]);
+    }
+
+    public function deleteWithOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'app_slug' => ['required', 'string', 'max:100'],
+            'channel' => ['required', 'string', 'max:100'],
+            'filename' => ['required', 'string', 'max:255'],
+            'otp' => ['nullable', 'digits:6'],
+        ]);
+
+        $appSlug = $this->sanitizeSegment($validated['app_slug'], 'app_slug');
+        $channel = $this->sanitizeSegment($validated['channel'], 'channel');
+        $filename = basename($validated['filename']);
+        $path = $this->releasesDir($appSlug, $channel) . '/' . $filename;
+
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
+
+        if ($this->releaseRequiresOtp($appSlug, $channel, $filename)) {
+            $isValid = $this->consumeDownloadOtp($request->ip(), $appSlug, $channel, $filename, (string) ($validated['otp'] ?? ''));
+
+            if (!$isValid) {
+                return response()->json([
+                    'message' => 'OTP khong dung hoac da het han.',
+                ], 422);
+            }
+        }
+
+        Storage::disk('public')->delete($path);
+
+        $metaPath = $this->metaPath($appSlug, $channel);
+        if (Storage::disk('public')->exists($metaPath)) {
+            $payload = json_decode(Storage::disk('public')->get($metaPath), true);
+            if (is_array($payload) && basename($payload['file_path'] ?? '') === $filename) {
+                Storage::disk('public')->delete($metaPath);
+            }
+        }
+
+        return response()->json([
+            'message' => 'Da xoa file.',
         ]);
     }
 
@@ -359,6 +413,7 @@ class AppUpdateController extends Controller
             'version' => $payload['version'],
             'notes' => $payload['notes'] ?? '',
             'mandatory' => (bool) ($payload['mandatory'] ?? false),
+            'otp_protected' => (bool) ($payload['otp_protected'] ?? true),
             'size' => (int) ($payload['size'] ?? 0),
             'sha256' => $payload['sha256'] ?? null,
             'published_at' => $payload['published_at'] ?? null,
@@ -428,6 +483,37 @@ class AppUpdateController extends Controller
     private function downloadOtpCacheKey(string $ip, string $appSlug, string $channel, string $filename): string
     {
         return 'download_otp:' . sha1($ip . '|' . $appSlug . '|' . $channel . '|' . $filename);
+    }
+
+    private function releaseRequiresOtp(string $appSlug, string $channel, string $filename): bool
+    {
+        $metaPath = $this->metaPath($appSlug, $channel);
+
+        if (!Storage::disk('public')->exists($metaPath)) {
+            return true;
+        }
+
+        $payload = json_decode(Storage::disk('public')->get($metaPath), true);
+
+        if (!is_array($payload) || basename($payload['file_path'] ?? '') !== $filename) {
+            return true;
+        }
+
+        return (bool) ($payload['otp_protected'] ?? true);
+    }
+
+    private function consumeDownloadOtp(string $ip, string $appSlug, string $channel, string $filename, string $otp): bool
+    {
+        $key = $this->downloadOtpCacheKey($ip, $appSlug, $channel, $filename);
+        $cached = Cache::get($key);
+
+        if (!is_array($cached) || !isset($cached['otp']) || $cached['otp'] !== $otp) {
+            return false;
+        }
+
+        Cache::forget($key);
+
+        return true;
     }
 
     private function appendDownloadLog(string $ip, string $filename, string $appSlug, string $channel): void
