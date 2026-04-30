@@ -67,13 +67,11 @@ class AppUpdateController extends Controller
 
         $otpProtected = (bool) ($validated['otp_protected'] ?? true);
 
-        if ($otpProtected) {
-            $cached = Cache::get($this->fileUploadOtpKey($request->ip()));
-            if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
-                return response()->json(['message' => 'OTP upload không đúng hoặc đã hết hạn.'], 422);
-            }
-            Cache::forget($this->fileUploadOtpKey($request->ip()));
+        $cached = Cache::get($this->fileUploadOtpKey($request->ip()));
+        if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+            return response()->json(['message' => 'OTP upload không đúng hoặc đã hết hạn.'], 422);
         }
+        Cache::forget($this->fileUploadOtpKey($request->ip()));
 
         $file     = $request->file('file');
         $filename = $file->getClientOriginalName() ?: ('upload-' . now()->format('YmdHis'));
