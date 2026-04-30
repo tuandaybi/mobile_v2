@@ -41,7 +41,7 @@ class AppUpdateController extends Controller
             'requestUploadOtpUrl' => '/api/admin/app-updates/request-upload-otp',
             'deleteWithOtpUrl' => '/delete-file',
         ]);
-'}]}Japgollyfunctions.multi_edit კომენტary to=functions.multi_edit  北京赛车女  大发彩票网  սխալ to=functions.multi_edit  天天中彩票和Error: Unexpected token ' in JSON at position 688＿日本ीं to=functions.multi_edit 总代理联系 to=functions.multi_edit wuregion code 400 გამართული json invalid because mixed quotes. +#+#+#+#+#+assistant to=functions.read_file კომენტary  玩大发快三{    }
+    }
 
     public function trash(): JsonResponse
     {
