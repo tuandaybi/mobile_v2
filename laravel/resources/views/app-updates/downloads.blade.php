@@ -110,10 +110,12 @@
                                         data-req-otp-app="{{ $file['app_slug'] }}"
                                         data-req-otp-channel="{{ $file['channel'] }}"
                                         data-req-otp-filename="{{ $file['filename'] }}"
+                                        data-file-id="m-{{ $hash }}"
                                         onclick="requestDownloadOtp(this)">
                                         Lấy OTP
                                     </button>
                                 </div>
+                                <div id="actions-m-{{ $hash }}" class="{{ $isSelected ? 'flex' : 'hidden' }} gap-2">
                             @else
                                 <input type="hidden"
                                     data-otp-input="0"
@@ -121,9 +123,8 @@
                                     data-channel="{{ $file['channel'] }}"
                                     data-filename="{{ $file['filename'] }}"
                                     data-download-requires-otp="0">
+                                <div class="flex gap-2">
                             @endif
-
-                            <div class="flex gap-2">
                                 <button type="button"
                                     class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
                                     onclick="downloadFile(this)"
@@ -209,28 +210,25 @@
                                                 data-req-otp-app="{{ $file['app_slug'] }}"
                                                 data-req-otp-channel="{{ $file['channel'] }}"
                                                 data-req-otp-filename="{{ $file['filename'] }}"
+                                                data-file-id="d-{{ $hash }}"
                                                 onclick="requestDownloadOtp(this)">
                                                 Lấy OTP
                                             </button>
                                         </div>
                                     @else
-                                        <span class="inline-flex items-center gap-1 text-xs text-zinc-400">
-                                            <svg xmlns="http://www.w3.org/2000/svg" class="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor">
-                                                <path d="M10 2a5 5 0 00-5 5v2a2 2 0 00-2 2v5a2 2 0 002 2h10a2 2 0 002-2v-5a2 2 0 00-2-2H7V7a3 3 0 015.905-.75 1 1 0 001.937-.5A5.002 5.002 0 0010 2z"/>
-                                            </svg>
-                                            Không cần OTP
-                                        </span>
                                         <input type="hidden"
                                             data-otp-input="0"
                                             data-app-slug="{{ $file['app_slug'] }}"
                                             data-channel="{{ $file['channel'] }}"
                                             data-filename="{{ $file['filename'] }}"
                                             data-download-requires-otp="0">
+                                        <span class="text-xs text-zinc-300">—</span>
                                     @endif
                                 </td>
 
                                 <td class="px-5 py-3.5">
-                                    <div class="flex items-center justify-end gap-2">
+                                    <div id="actions-d-{{ $hash }}"
+                                        class="{{ ($file['otp_protected'] ?? true) && !$isSelected ? 'hidden' : 'flex' }} items-center justify-end gap-2">
                                         <button type="button"
                                             class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
                                             onclick="downloadFile(this)"
@@ -421,6 +419,7 @@
         const appSlug  = btn.dataset.reqOtpApp;
         const channel  = btn.dataset.reqOtpChannel;
         const filename = btn.dataset.reqOtpFilename;
+        const fileId   = btn.dataset.fileId;
 
         btn.disabled = true;
         const orig = btn.textContent;
@@ -439,6 +438,11 @@
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 toast(data.message || 'Đã gửi OTP qua Telegram', 'success');
+                const actionsEl = document.getElementById('actions-' + fileId);
+                if (actionsEl) {
+                    actionsEl.classList.remove('hidden');
+                    actionsEl.classList.add('flex');
+                }
                 const input = findOtpInput(appSlug, channel, filename);
                 input?.focus();
             } else {
