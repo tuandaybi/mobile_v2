@@ -46,18 +46,12 @@ class AppUpdateApiTest extends TestCase
             ->assertJsonPath('latest.version', '1.2.0')
             ->assertJsonPath(
                 'latest.download_url',
-                route('app-updates.download', [
-                    'appSlug' => 'desktop-pos',
+                route('app-updates.dashboard', [
+                    'app_slug' => 'desktop-pos',
                     'channel' => 'app',
                     'filename' => 'desktop-pos-app-v1.exe',
-                ])
+                ], false) . '#downloads'
             );
-
-        $download = $this->get('/api/app-updates/desktop-pos/app/download/desktop-pos-app-v1.exe');
-
-        $download
-            ->assertOk()
-            ->assertHeader('content-type', 'application/octet-stream');
     }
 
     public function test_custom_channel_latest_is_independent_from_default_channel(): void
@@ -99,11 +93,11 @@ class AppUpdateApiTest extends TestCase
             ->assertJsonPath('latest.version', '2.0.0')
             ->assertJsonPath(
                 'latest.download_url',
-                route('app-updates.download', [
-                    'appSlug' => 'tiktok-bot',
+                route('app-updates.dashboard', [
+                    'app_slug' => 'tiktok-bot',
                     'channel' => 'bot-server',
                     'filename' => 'tiktok-bot-bot-server-v2.exe',
-                ])
+                ], false) . '#downloads'
             );
     }
 

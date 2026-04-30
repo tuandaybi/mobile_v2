@@ -25,7 +25,6 @@ Route::get('admin/app-updates/trash', [AppUpdateController::class, 'trash'])->na
 Route::get('admin/app-updates/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.legacy');
 Route::get('admin/app-updates/{appSlug}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest.default');
 Route::get('admin/app-updates/{appSlug}/{channel}/latest', [AppUpdateController::class, 'latest'])->name('app-updates.latest');
-Route::get('admin/app-updates/{appSlug}/{channel}/download/{filename}', [AppUpdateController::class, 'download'])->name('app-updates.download');
 // App updates
 Route::prefix('admin')
     ->middleware(['auth:sanctum', 'permission:admin.saoluu'])

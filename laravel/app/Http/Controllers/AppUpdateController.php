@@ -264,19 +264,6 @@ class AppUpdateController extends Controller
         ]);
     }
 
-    public function download(string $appSlug, string $channel, string $filename)
-    {
-        $appSlug = $this->sanitizeSegment($appSlug, 'app_slug');
-        $channel = $this->sanitizeSegment($channel, 'channel');
-        $path = $this->releasesDir($appSlug, $channel) . '/' . basename($filename);
-
-        abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file update.');
-
-        return Storage::disk('public')->download($path, basename($filename), [
-            'Content-Type' => 'application/octet-stream',
-        ]);
-    }
-
     public function requestDownloadOtp(Request $request): JsonResponse
     {
         $validated = $request->validate([
@@ -430,7 +417,7 @@ class AppUpdateController extends Controller
             'app_slug' => $appSlug,
             'channel' => $channel,
             'filename' => $filename,
-        ], false);
+        ], false) . '#downloads';
     }
 
     private function uploadOtpCacheKey(string $ip, string $appSlug, string $channel, string $version): string
