@@ -287,25 +287,6 @@
                     class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
             </div>
 
-            <div class="grid grid-cols-2 gap-3">
-                <div>
-                    <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">App Slug</label>
-                    <input id="appSlug" type="text" placeholder="vd: my-app"
-                        class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                </div>
-                <div>
-                    <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">Channel</label>
-                    <input id="channel" type="text" placeholder="vd: app"
-                        class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                </div>
-            </div>
-
-            <div>
-                <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">Version</label>
-                <input id="version" type="text" placeholder="vd: 1.0.0"
-                    class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-            </div>
-
             <div>
                 <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">File</label>
                 <label class="flex flex-col items-center gap-2 w-full cursor-pointer rounded-xl border-2 border-dashed border-zinc-300 px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50/30 transition" id="fileDropZone">
@@ -457,17 +438,15 @@
     }
 
     /* ── upload OTP request ─────────────────────────────────────── */
+    function autoVersion() {
+        return new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+    }
+
     async function requestUploadOtp() {
         if (!isOtpProtected()) { toast('Upload không dùng OTP', 'warning'); return; }
 
-        const token   = getToken();
-        const appSlug = $('appSlug').value.trim();
-        const channel = $('channel').value.trim();
-        const version = $('version').value.trim();
-
-        if (!token)   { toast('Nhập Security Code trước', 'warning'); return; }
-        if (!appSlug) { toast('Nhập App Slug trước', 'warning'); return; }
-        if (!version) { toast('Nhập Version trước', 'warning'); return; }
+        const token = getToken();
+        if (!token) { toast('Nhập Security Code trước', 'warning'); return; }
 
         const btn = $('requestUploadOtpBtn');
         btn.disabled = true;
@@ -480,9 +459,9 @@
                     'Authorization': 'Bearer ' + token,
                 },
                 body: new URLSearchParams({
-                    app_slug: appSlug,
-                    channel: channel || 'app',
-                    version,
+                    app_slug: 'release',
+                    channel: 'app',
+                    version: autoVersion(),
                 }),
             });
             const data = await parseResponse(res);
@@ -503,17 +482,12 @@
     async function handleUpload(e) {
         e.preventDefault();
 
-        const token   = getToken();
-        const appSlug = $('appSlug').value.trim();
-        const channel = $('channel').value.trim();
-        const version = $('version').value.trim();
-        const otp     = getUploadOtp();
-        const file    = $('file').files[0];
+        const token = getToken();
+        const otp   = getUploadOtp();
+        const file  = $('file').files[0];
 
-        if (!token)   { toast('Nhập Security Code', 'warning'); return; }
-        if (!appSlug) { toast('Nhập App Slug', 'warning'); return; }
-        if (!version) { toast('Nhập Version', 'warning'); return; }
-        if (!file)    { toast('Chọn file cần upload', 'warning'); return; }
+        if (!token) { toast('Nhập Security Code', 'warning'); return; }
+        if (!file)  { toast('Chọn file cần upload', 'warning'); return; }
         if (isOtpProtected() && !otp) { toast('Nhập OTP upload', 'warning'); return; }
 
         const btn = $('uploadBtn');
@@ -522,9 +496,9 @@
         $('uploadOutput').classList.add('hidden');
 
         const fd = new FormData();
-        fd.append('app_slug', appSlug);
-        fd.append('channel', channel || 'app');
-        fd.append('version', version);
+        fd.append('app_slug', 'release');
+        fd.append('channel', 'app');
+        fd.append('version', autoVersion());
         fd.append('otp_protected', isOtpProtected() ? '1' : '0');
         fd.append('otp', otp);
         fd.append('file', file);
