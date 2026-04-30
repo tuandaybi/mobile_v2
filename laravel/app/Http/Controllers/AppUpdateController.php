@@ -6,6 +6,8 @@ use App\Notifications\TelegramNotification;
 use Illuminate\Contracts\View\View;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Storage;
@@ -35,11 +37,23 @@ class AppUpdateController extends Controller
     {
         $this->purgeExpiredTrash();
 
+        $all     = $this->releaseCollection()->values();
+        $perPage = 20;
+        $page    = (int) request()->input('page', 1);
+
+        $paginator = new LengthAwarePaginator(
+            $all->forPage($page, $perPage),
+            $all->count(),
+            $perPage,
+            $page,
+            ['path' => request()->url(), 'query' => request()->query()]
+        );
+
         return view('app-updates.downloads', [
-            'files' => $this->releaseCollection()->values(),
-            'publishUrl' => '/api/admin/app-updates/publish',
-            'requestUploadOtpUrl' => '/api/admin/app-updates/request-upload-otp',
-            'deleteWithOtpUrl' => '/delete-file',
+            'files'              => $paginator,
+            'publishUrl'         => '/api/admin/app-updates/publish',
+            'requestUploadOtpUrl'=> '/api/admin/app-updates/request-upload-otp',
+            'deleteWithOtpUrl'   => '/delete-file',
         ]);
     }
 
@@ -381,18 +395,50 @@ class AppUpdateController extends Controller
         ]);
     }
 
-    private function releaseCollection()
+    private function releaseCollection(): \Illuminate\Support\Collection
     {
-        return collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
-            ->filter(fn (string $path) => Str::endsWith($path, '/latest.json'))
-            ->map(function (string $path) {
-                $payload = json_decode(Storage::disk('public')->get($path), true);
-
-                if (!is_array($payload) || !isset($payload['app_slug'], $payload['version'], $payload['file_path'])) {
-                    return null;
+        // Build a map of latest.json metadata keyed by "app_slug|channel"
+        $latestMeta = collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
+            ->filter(fn (string $p) => Str::endsWith($p, '/latest.json'))
+            ->mapWithKeys(function (string $p) {
+                $payload = json_decode(Storage::disk('public')->get($p), true);
+                if (!is_array($payload) || empty($payload['app_slug'])) {
+                    return [];
                 }
+                $key = $payload['app_slug'] . '|' . ($payload['channel'] ?? self::DEFAULT_CHANNEL);
+                return [$key => $payload];
+            });
 
-                return $this->normalizeRelease($payload);
+        // Enumerate every actual file inside releases/ directories
+        return collect(Storage::disk('public')->allFiles(self::ROOT_DIR))
+            ->filter(function (string $path) {
+                // app-updates/{slug}/{channel}/releases/{file}
+                return str_contains($path, '/releases/') && !Str::endsWith($path, '.json');
+            })
+            ->map(function (string $path) use ($latestMeta) {
+                $segments = explode('/', $path);
+                if (count($segments) < 5) return null;
+
+                $appSlug  = $segments[1];
+                $channel  = $segments[2];
+                $filename = basename($path);
+                $key      = $appSlug . '|' . $channel;
+                $meta     = $latestMeta->get($key, []);
+                $isLatest = is_array($meta) && basename($meta['file_path'] ?? '') === $filename;
+
+                return [
+                    'app_slug'     => $appSlug,
+                    'channel'      => $channel,
+                    'filename'     => $filename,
+                    'size'         => Storage::disk('public')->size($path),
+                    'otp_protected'=> $isLatest ? (bool) ($meta['otp_protected'] ?? true) : true,
+                    'published_at' => $isLatest
+                        ? ($meta['published_at'] ?? null)
+                        : Carbon::createFromTimestamp(Storage::disk('public')->lastModified($path))->toIso8601String(),
+                    'version'      => $isLatest ? ($meta['version'] ?? null) : null,
+                    'file_path'    => $path,
+                    'download_url' => $this->downloadEntryUrl($appSlug, $channel, $filename),
+                ];
             })
             ->filter()
             ->sortByDesc('published_at');
