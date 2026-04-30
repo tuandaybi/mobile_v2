@@ -18,6 +18,8 @@ class AppUpdateController extends Controller
     private const ROOT_DIR = 'app-updates';
     private const TRASH_DIR = 'app-updates-trash';
     private const DEFAULT_CHANNEL = 'app';
+    private const FILES_DIR = 'files';
+    private const META_DIR  = 'files-meta';
 
     public function dashboard(): View
     {
@@ -35,9 +37,7 @@ class AppUpdateController extends Controller
 
     public function downloadPage(): View
     {
-        $this->purgeExpiredTrash();
-
-        $all     = $this->releaseCollection()->values();
+        $all     = $this->fileCollection()->values();
         $perPage = 20;
         $page    = (int) request()->input('page', 1);
 
@@ -51,10 +51,157 @@ class AppUpdateController extends Controller
 
         return view('app-updates.downloads', [
             'files'              => $paginator,
-            'publishUrl'         => '/api/admin/app-updates/publish',
-            'requestUploadOtpUrl'=> '/api/admin/app-updates/request-upload-otp',
-            'deleteWithOtpUrl'   => '/delete-file',
+            'uploadUrl'          => route('file.upload', [], false),
+            'requestUploadOtpUrl'=> route('file.request-upload-otp', [], false),
+            'deleteWithOtpUrl'   => route('file.delete', [], false),
         ]);
+    }
+
+    public function fileUpload(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'otp_protected' => ['nullable', 'boolean'],
+            'otp'           => ['nullable', 'digits:6'],
+            'file'          => ['required', 'file', 'max:512000'],
+        ]);
+
+        $otpProtected = (bool) ($validated['otp_protected'] ?? true);
+
+        if ($otpProtected) {
+            $cached = Cache::get($this->fileUploadOtpKey($request->ip()));
+            if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+                return response()->json(['message' => 'OTP upload không đúng hoặc đã hết hạn.'], 422);
+            }
+            Cache::forget($this->fileUploadOtpKey($request->ip()));
+        }
+
+        $file     = $request->file('file');
+        $filename = $file->getClientOriginalName() ?: ('upload-' . now()->format('YmdHis'));
+        $path     = $file->storeAs(self::FILES_DIR, $filename, 'public');
+        $fullPath = Storage::disk('public')->path($path);
+
+        Storage::disk('public')->put(
+            self::META_DIR . '/' . $filename . '.json',
+            json_encode([
+                'filename'      => $filename,
+                'otp_protected' => $otpProtected,
+                'size'          => $file->getSize(),
+                'sha256'        => hash_file('sha256', $fullPath),
+                'published_at'  => now()->toIso8601String(),
+            ], JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)
+        );
+
+        return response()->json(['message' => 'Upload thành công.'], 201);
+    }
+
+    public function fileRequestUploadOtp(Request $request): JsonResponse
+    {
+        $otp = (string) random_int(100000, 999999);
+        Cache::put($this->fileUploadOtpKey($request->ip()), ['otp' => $otp], now()->addMinutes(5));
+        TelegramNotification::send("OTP upload file: {$otp}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
+
+        return response()->json(['message' => 'Đã gửi OTP upload qua Telegram. Mã có hiệu lực 5 phút.']);
+    }
+
+    public function fileRequestDownloadOtp(Request $request): JsonResponse
+    {
+        $filename = basename($request->validate(['filename' => ['required', 'string', 'max:255']])['filename']);
+        abort_unless(Storage::disk('public')->exists(self::FILES_DIR . '/' . $filename), 404, 'Không tìm thấy file.');
+
+        $meta = $this->fileMeta($filename);
+        if (!($meta['otp_protected'] ?? true)) {
+            return response()->json(['message' => 'File này không yêu cầu OTP.']);
+        }
+
+        $otp = (string) random_int(100000, 999999);
+        Cache::put($this->fileDownloadOtpKey($request->ip(), $filename), ['otp' => $otp], now()->addMinutes(5));
+        TelegramNotification::send("OTP tải file: {$otp}\nFile: {$filename}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
+
+        return response()->json(['message' => 'Đã gửi OTP qua Telegram. Mã có hiệu lực 5 phút.']);
+    }
+
+    public function fileVerifyDownloadOtp(Request $request)
+    {
+        $validated = $request->validate([
+            'filename' => ['required', 'string', 'max:255'],
+            'otp'      => ['nullable', 'digits:6'],
+        ]);
+        $filename = basename($validated['filename']);
+        $path     = self::FILES_DIR . '/' . $filename;
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file.');
+
+        $meta = $this->fileMeta($filename);
+        if ($meta['otp_protected'] ?? true) {
+            $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
+            $cached = Cache::get($key);
+            if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+                return back()->withInput()->withErrors(['otp' => 'OTP không đúng hoặc đã hết hạn.']);
+            }
+            Cache::forget($key);
+        }
+
+        $this->appendDownloadLog($request->ip(), $filename, '-', '-');
+        return Storage::disk('public')->download($path, $filename, ['Content-Type' => 'application/octet-stream']);
+    }
+
+    public function fileDeleteWithOtp(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'filename' => ['required', 'string', 'max:255'],
+            'otp'      => ['nullable', 'digits:6'],
+        ]);
+        $filename = basename($validated['filename']);
+        $path     = self::FILES_DIR . '/' . $filename;
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file.');
+
+        $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
+        $cached = Cache::get($key);
+        if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+            return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
+        }
+        Cache::forget($key);
+
+        Storage::disk('public')->delete($path);
+        Storage::disk('public')->delete(self::META_DIR . '/' . $filename . '.json');
+
+        return response()->json(['message' => 'Đã xóa file.']);
+    }
+
+    private function fileCollection(): \Illuminate\Support\Collection
+    {
+        return collect(Storage::disk('public')->files(self::FILES_DIR))
+            ->map(function (string $path) {
+                $filename = basename($path);
+                $meta     = $this->fileMeta($filename);
+                return [
+                    'filename'      => $filename,
+                    'size'          => Storage::disk('public')->size($path),
+                    'otp_protected' => (bool) ($meta['otp_protected'] ?? true),
+                    'published_at'  => $meta['published_at'] ?? Carbon::createFromTimestamp(
+                        Storage::disk('public')->lastModified($path)
+                    )->toIso8601String(),
+                    'file_path'     => $path,
+                ];
+            })
+            ->filter()
+            ->sortByDesc('published_at');
+    }
+
+    private function fileMeta(string $filename): array
+    {
+        $metaPath = self::META_DIR . '/' . $filename . '.json';
+        if (!Storage::disk('public')->exists($metaPath)) return [];
+        return json_decode(Storage::disk('public')->get($metaPath), true) ?? [];
+    }
+
+    private function fileUploadOtpKey(string $ip): string
+    {
+        return 'file_upload_otp:' . sha1($ip);
+    }
+
+    private function fileDownloadOtpKey(string $ip, string $filename): string
+    {
+        return 'file_download_otp:' . sha1($ip . '|' . $filename);
     }
 
     public function trash(): JsonResponse

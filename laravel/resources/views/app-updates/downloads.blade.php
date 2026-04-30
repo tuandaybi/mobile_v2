@@ -7,7 +7,6 @@
     <title>File Server</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        [x-cloak] { display: none; }
         .toast-enter { animation: toastIn .25s ease forwards; }
         .toast-leave { animation: toastOut .25s ease forwards; }
         @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
@@ -16,22 +15,15 @@
 </head>
 <body class="bg-zinc-100 min-h-screen text-zinc-900 antialiased">
 
-{{-- Toast container --}}
 <div id="toastContainer" class="fixed bottom-5 right-5 z-[100] flex flex-col gap-2 pointer-events-none"></div>
 
-@php
-    $selectedAppSlug = request('app_slug');
-    $selectedChannel = request('channel');
-    $selectedFilename = request('filename');
-@endphp
-
-<div class="max-w-5xl mx-auto px-4 py-8 space-y-6">
+<div class="max-w-4xl mx-auto px-4 py-8 space-y-6">
 
     {{-- Header --}}
     <div class="flex items-center justify-between">
         <div>
             <h1 class="text-2xl font-bold tracking-tight">File Server</h1>
-            <p class="text-sm text-zinc-500 mt-0.5">Quản lý và phân phối file với bảo mật OTP</p>
+            <p class="text-sm text-zinc-500 mt-0.5">Quản lý file với bảo mật OTP</p>
         </div>
         <button id="openUploadBtn" type="button"
             class="flex items-center gap-2 rounded-xl bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-black transition-colors shadow-sm">
@@ -45,9 +37,7 @@
     @if ($errors->any())
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-red-700 text-sm">
             <ul class="list-disc pl-4 space-y-1">
-                @foreach ($errors->all() as $error)
-                    <li>{{ $error }}</li>
-                @endforeach
+                @foreach ($errors->all() as $error)<li>{{ $error }}</li>@endforeach
             </ul>
         </div>
     @endif
@@ -70,15 +60,8 @@
             {{-- Mobile cards --}}
             <div class="block sm:hidden divide-y divide-zinc-100">
                 @foreach ($files as $file)
-                    @php
-                        $hash = md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? ''));
-                        $isSelected = $selectedAppSlug === ($file['app_slug'] ?? null)
-                            && $selectedChannel === ($file['channel'] ?? null)
-                            && $selectedFilename === ($file['filename'] ?? null);
-                    @endphp
-                    <div id="m-{{ $hash }}" data-selected="{{ $isSelected ? '1' : '0' }}"
-                        class="p-4 {{ $isSelected ? 'bg-blue-50' : '' }}">
-
+                    @php $hash = md5($file['filename'] ?? ''); @endphp
+                    <div class="p-4">
                         <div class="flex items-start justify-between gap-2">
                             <span class="font-medium text-sm break-all leading-5">{{ $file['filename'] }}</span>
                             @if ($file['otp_protected'] ?? true)
@@ -91,7 +74,6 @@
                         <div class="mt-2 flex gap-4 text-xs text-zinc-500">
                             <span>{{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB</span>
                             <span>{{ !empty($file['published_at']) ? \Illuminate\Support\Carbon::parse($file['published_at'])->format('d/m/Y H:i') : '-' }}</span>
-                            <span class="text-zinc-400">{{ ($file['app_slug'] ?? '') }}/{{ ($file['channel'] ?? '') }}</span>
                         </div>
 
                         <div class="mt-3 space-y-2">
@@ -100,45 +82,32 @@
                                     <input type="text" inputmode="numeric" maxlength="6"
                                         placeholder="Nhập OTP 6 số"
                                         class="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                        data-otp-input="{{ $isSelected ? '1' : '0' }}"
-                                        data-app-slug="{{ $file['app_slug'] }}"
-                                        data-channel="{{ $file['channel'] }}"
-                                        data-filename="{{ $file['filename'] }}"
-                                        data-download-requires-otp="1">
+                                        data-otp-for="{{ $hash }}">
                                     <button type="button"
                                         class="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
-                                        data-req-otp-app="{{ $file['app_slug'] }}"
-                                        data-req-otp-channel="{{ $file['channel'] }}"
-                                        data-req-otp-filename="{{ $file['filename'] }}"
                                         data-file-id="m-{{ $hash }}"
+                                        data-filename="{{ $file['filename'] }}"
                                         onclick="requestDownloadOtp(this)">
                                         Lấy OTP
                                     </button>
                                 </div>
-                                <div id="actions-m-{{ $hash }}" class="{{ $isSelected ? 'flex' : 'hidden' }} gap-2">
+                                <div id="actions-m-{{ $hash }}" class="hidden gap-2">
                             @else
-                                <input type="hidden"
-                                    data-otp-input="0"
-                                    data-app-slug="{{ $file['app_slug'] }}"
-                                    data-channel="{{ $file['channel'] }}"
-                                    data-filename="{{ $file['filename'] }}"
-                                    data-download-requires-otp="0">
                                 <div class="flex gap-2">
                             @endif
                                 <button type="button"
                                     class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-                                    onclick="downloadFile(this)"
-                                    data-app-slug="{{ $file['app_slug'] }}"
-                                    data-channel="{{ $file['channel'] }}"
-                                    data-filename="{{ $file['filename'] }}">
+                                    data-hash="{{ $hash }}"
+                                    data-filename="{{ $file['filename'] }}"
+                                    data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                                    onclick="downloadFile(this)">
                                     Tải file
                                 </button>
                                 <button type="button"
                                     class="flex-1 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
-                                    onclick="deleteFile(this)"
-                                    data-app-slug="{{ $file['app_slug'] }}"
-                                    data-channel="{{ $file['channel'] }}"
-                                    data-filename="{{ $file['filename'] }}">
+                                    data-hash="{{ $hash }}"
+                                    data-filename="{{ $file['filename'] }}"
+                                    onclick="deleteFile(this)">
                                     Xóa
                                 </button>
                             </div>
@@ -153,23 +122,16 @@
                     <thead>
                         <tr class="border-b border-zinc-100 bg-zinc-50/60 text-xs font-semibold uppercase tracking-wide text-zinc-400">
                             <th class="px-5 py-3 text-left">File</th>
-                            <th class="px-5 py-3 text-left">App / Channel</th>
                             <th class="px-5 py-3 text-left">Dung lượng</th>
                             <th class="px-5 py-3 text-left">Ngày upload</th>
-                            <th class="px-5 py-3 text-left w-56">OTP download</th>
+                            <th class="px-5 py-3 text-left w-52">OTP download</th>
                             <th class="px-5 py-3 text-right">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100">
                         @foreach ($files as $file)
-                            @php
-                                $hash = md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? ''));
-                                $isSelected = $selectedAppSlug === ($file['app_slug'] ?? null)
-                                    && $selectedChannel === ($file['channel'] ?? null)
-                                    && $selectedFilename === ($file['filename'] ?? null);
-                            @endphp
-                            <tr id="d-{{ $hash }}" data-selected="{{ $isSelected ? '1' : '0' }}"
-                                class="hover:bg-zinc-50/50 transition-colors {{ $isSelected ? 'bg-blue-50' : '' }}">
+                            @php $hash = md5($file['filename'] ?? ''); @endphp
+                            <tr class="hover:bg-zinc-50/50 transition-colors">
 
                                 <td class="px-5 py-3.5">
                                     <div class="flex items-center gap-2">
@@ -180,10 +142,6 @@
                                         </div>
                                         <span class="font-medium text-sm break-all">{{ $file['filename'] }}</span>
                                     </div>
-                                </td>
-
-                                <td class="px-5 py-3.5 text-sm text-zinc-500 whitespace-nowrap">
-                                    <code class="text-xs bg-zinc-100 rounded px-1.5 py-0.5">{{ $file['app_slug'] }}/{{ $file['channel'] }}</code>
                                 </td>
 
                                 <td class="px-5 py-3.5 text-sm text-zinc-600 whitespace-nowrap">
@@ -199,50 +157,37 @@
                                         <div class="flex items-center gap-1.5">
                                             <input type="text" inputmode="numeric" maxlength="6"
                                                 placeholder="6 chữ số"
-                                                class="w-28 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                                data-otp-input="{{ $isSelected ? '1' : '0' }}"
-                                                data-app-slug="{{ $file['app_slug'] }}"
-                                                data-channel="{{ $file['channel'] }}"
-                                                data-filename="{{ $file['filename'] }}"
-                                                data-download-requires-otp="1">
+                                                class="w-24 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                                                data-otp-for="{{ $hash }}">
                                             <button type="button"
                                                 class="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
-                                                data-req-otp-app="{{ $file['app_slug'] }}"
-                                                data-req-otp-channel="{{ $file['channel'] }}"
-                                                data-req-otp-filename="{{ $file['filename'] }}"
                                                 data-file-id="d-{{ $hash }}"
+                                                data-filename="{{ $file['filename'] }}"
                                                 onclick="requestDownloadOtp(this)">
                                                 Lấy OTP
                                             </button>
                                         </div>
                                     @else
-                                        <input type="hidden"
-                                            data-otp-input="0"
-                                            data-app-slug="{{ $file['app_slug'] }}"
-                                            data-channel="{{ $file['channel'] }}"
-                                            data-filename="{{ $file['filename'] }}"
-                                            data-download-requires-otp="0">
                                         <span class="text-xs text-zinc-300">—</span>
                                     @endif
                                 </td>
 
                                 <td class="px-5 py-3.5">
                                     <div id="actions-d-{{ $hash }}"
-                                        class="{{ ($file['otp_protected'] ?? true) && !$isSelected ? 'hidden' : 'flex' }} items-center justify-end gap-2">
+                                        class="{{ ($file['otp_protected'] ?? true) ? 'hidden' : 'flex' }} items-center justify-end gap-2">
                                         <button type="button"
                                             class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-                                            onclick="downloadFile(this)"
-                                            data-app-slug="{{ $file['app_slug'] }}"
-                                            data-channel="{{ $file['channel'] }}"
-                                            data-filename="{{ $file['filename'] }}">
+                                            data-hash="{{ $hash }}"
+                                            data-filename="{{ $file['filename'] }}"
+                                            data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                                            onclick="downloadFile(this)">
                                             Tải file
                                         </button>
                                         <button type="button"
                                             class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
-                                            onclick="deleteFile(this)"
-                                            data-app-slug="{{ $file['app_slug'] }}"
-                                            data-channel="{{ $file['channel'] }}"
-                                            data-filename="{{ $file['filename'] }}">
+                                            data-hash="{{ $hash }}"
+                                            data-filename="{{ $file['filename'] }}"
+                                            onclick="deleteFile(this)">
                                             Xóa
                                         </button>
                                     </div>
@@ -289,7 +234,7 @@
 
             <div>
                 <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">File</label>
-                <label class="flex flex-col items-center gap-2 w-full cursor-pointer rounded-xl border-2 border-dashed border-zinc-300 px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50/30 transition" id="fileDropZone">
+                <label class="flex flex-col items-center gap-2 w-full cursor-pointer rounded-xl border-2 border-dashed border-zinc-300 px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50/30 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
@@ -333,31 +278,26 @@
     </div>
 </div>
 
-{{-- Hidden form for download --}}
+{{-- Hidden download form --}}
 <form id="downloadForm" method="POST" action="{{ route('app-updates.verify-otp', [], false) }}" class="hidden">
     @csrf
-    <input type="hidden" name="app_slug">
-    <input type="hidden" name="channel">
     <input type="hidden" name="filename">
     <input type="hidden" name="otp">
 </form>
 
 <script>
-    const publishUrl          = @json($publishUrl);
-    const requestUploadOtpUrl = @json($requestUploadOtpUrl);
-    const deleteWithOtpUrl    = @json($deleteWithOtpUrl);
-    const csrfToken           = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
+    const uploadUrl          = @json($uploadUrl);
+    const requestUploadOtpUrl= @json($requestUploadOtpUrl);
+    const deleteWithOtpUrl   = @json($deleteWithOtpUrl);
+    const csrfToken          = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
-    /* ── helpers ───────────────────────────────────────────────── */
     const $ = (id) => document.getElementById(id);
-    const getToken       = () => $('token').value.trim();
-    const getUploadOtp   = () => $('uploadOtp').value.trim();
-    const isOtpProtected = () => $('otpProtected').checked;
+    const getToken     = () => $('token').value.trim();
+    const getUploadOtp = () => $('uploadOtp').value.trim();
+    const isOtpOn      = () => $('otpProtected').checked;
 
-    function findOtpInput(appSlug, channel, filename) {
-        return document.querySelector(
-            `[data-app-slug="${appSlug}"][data-channel="${channel}"][data-filename="${filename}"][data-otp-input]`
-        );
+    function findOtpInput(hash) {
+        return document.querySelector(`[data-otp-for="${hash}"]`);
     }
 
     async function parseResponse(res) {
@@ -365,14 +305,9 @@
         try { return JSON.parse(text); } catch { return text; }
     }
 
-    /* ── toast ─────────────────────────────────────────────────── */
+    /* ── toast ─────────────────────────────────── */
     function toast(msg, type = 'info') {
-        const colors = {
-            success: 'bg-emerald-600',
-            error:   'bg-rose-600',
-            info:    'bg-zinc-800',
-            warning: 'bg-amber-500',
-        };
+        const colors = { success:'bg-emerald-600', error:'bg-rose-600', info:'bg-zinc-800', warning:'bg-amber-500' };
         const el = document.createElement('div');
         el.className = `pointer-events-auto toast-enter max-w-sm rounded-xl px-4 py-3 text-sm text-white shadow-lg ${colors[type] ?? colors.info}`;
         el.textContent = msg;
@@ -383,23 +318,15 @@
         }, 3500);
     }
 
-    /* ── modal ──────────────────────────────────────────────────── */
-    function openModal()  { $('uploadModal').classList.replace('hidden','flex'); }
-    function closeModal() { $('uploadModal').classList.replace('flex','hidden'); }
+    /* ── modal ──────────────────────────────────── */
+    function openModal()  { $('uploadModal').classList.replace('hidden', 'flex'); }
+    function closeModal() { $('uploadModal').classList.replace('flex', 'hidden'); }
+    function syncOtpSection() { $('uploadOtpSection').classList.toggle('hidden', !isOtpOn()); }
+    function updateFileLabel(input) { $('fileLabel').textContent = input.files[0]?.name ?? 'Chọn hoặc kéo thả file vào đây'; }
 
-    function syncOtpSection() {
-        $('uploadOtpSection').classList.toggle('hidden', !isOtpProtected());
-    }
-
-    function updateFileLabel(input) {
-        $('fileLabel').textContent = input.files[0]?.name ?? 'Chọn hoặc kéo thả file vào đây';
-    }
-
-    /* ── download OTP request ───────────────────────────────────── */
+    /* ── download OTP ───────────────────────────── */
     async function requestDownloadOtp(btn) {
-        const appSlug  = btn.dataset.reqOtpApp;
-        const channel  = btn.dataset.reqOtpChannel;
-        const filename = btn.dataset.reqOtpFilename;
+        const filename = btn.dataset.filename;
         const fileId   = btn.dataset.fileId;
 
         btn.disabled = true;
@@ -407,88 +334,54 @@
         btn.textContent = '...';
 
         try {
-            const res = await fetch('{{ route("app-updates.request-otp", [], false) }}', {
+            const res  = await fetch('{{ route("app-updates.request-otp", [], false) }}', {
                 method: 'POST',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                },
-                body: new URLSearchParams({ app_slug: appSlug, channel, filename }),
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: new URLSearchParams({ filename }),
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok) {
                 toast(data.message || 'Đã gửi OTP qua Telegram', 'success');
-                const actionsEl = document.getElementById('actions-' + fileId);
-                if (actionsEl) {
-                    actionsEl.classList.remove('hidden');
-                    actionsEl.classList.add('flex');
-                }
-                const input = findOtpInput(appSlug, channel, filename);
-                input?.focus();
+                const actEl = document.getElementById('actions-' + fileId);
+                if (actEl) { actEl.classList.remove('hidden'); actEl.classList.add('flex'); }
+                findOtpInput(fileId.replace(/^[md]-/, ''))?.focus();
             } else {
                 toast(data.message || 'Không gửi được OTP', 'error');
             }
-        } catch {
-            toast('Lỗi kết nối', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = orig;
-        }
+        } catch { toast('Lỗi kết nối', 'error'); }
+        finally { btn.disabled = false; btn.textContent = orig; }
     }
 
-    /* ── upload OTP request ─────────────────────────────────────── */
-    function autoVersion() {
-        return new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
-    }
-
+    /* ── upload OTP ─────────────────────────────── */
     async function requestUploadOtp() {
-        if (!isOtpProtected()) { toast('Upload không dùng OTP', 'warning'); return; }
-
+        if (!isOtpOn()) { toast('Upload không dùng OTP', 'warning'); return; }
         const token = getToken();
         if (!token) { toast('Nhập Security Code trước', 'warning'); return; }
 
         const btn = $('requestUploadOtpBtn');
         btn.disabled = true;
-
         try {
-            const res = await fetch(requestUploadOtpUrl, {
+            const res  = await fetch(requestUploadOtpUrl, {
                 method: 'POST',
-                headers: {
-                    'Accept': 'application/json',
-                    'Authorization': 'Bearer ' + token,
-                },
-                body: new URLSearchParams({
-                    app_slug: 'release',
-                    channel: 'app',
-                    version: autoVersion(),
-                }),
+                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-TOKEN': csrfToken },
             });
             const data = await parseResponse(res);
-            if (res.ok) {
-                toast(data.message || 'Đã gửi OTP upload qua Telegram', 'success');
-                $('uploadOtp').focus();
-            } else {
-                toast((data?.message) || 'Không gửi được OTP', 'error');
-            }
-        } catch {
-            toast('Lỗi kết nối', 'error');
-        } finally {
-            btn.disabled = false;
-        }
+            if (res.ok) { toast(data.message || 'Đã gửi OTP upload qua Telegram', 'success'); $('uploadOtp').focus(); }
+            else { toast(data?.message || 'Không gửi được OTP', 'error'); }
+        } catch { toast('Lỗi kết nối', 'error'); }
+        finally { btn.disabled = false; }
     }
 
-    /* ── upload ─────────────────────────────────────────────────── */
+    /* ── upload ─────────────────────────────────── */
     async function handleUpload(e) {
         e.preventDefault();
-
         const token = getToken();
         const otp   = getUploadOtp();
         const file  = $('file').files[0];
 
         if (!token) { toast('Nhập Security Code', 'warning'); return; }
         if (!file)  { toast('Chọn file cần upload', 'warning'); return; }
-        if (isOtpProtected() && !otp) { toast('Nhập OTP upload', 'warning'); return; }
+        if (isOtpOn() && !otp) { toast('Nhập OTP upload', 'warning'); return; }
 
         const btn = $('uploadBtn');
         btn.disabled = true;
@@ -496,101 +389,70 @@
         $('uploadOutput').classList.add('hidden');
 
         const fd = new FormData();
-        fd.append('app_slug', 'release');
-        fd.append('channel', 'app');
-        fd.append('version', autoVersion());
-        fd.append('otp_protected', isOtpProtected() ? '1' : '0');
+        fd.append('otp_protected', isOtpOn() ? '1' : '0');
         fd.append('otp', otp);
         fd.append('file', file);
 
         try {
-            const res  = await fetch(publishUrl, {
+            const res  = await fetch(uploadUrl, {
                 method: 'POST',
-                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token },
+                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-TOKEN': csrfToken },
                 body: fd,
             });
             const data = await parseResponse(res);
-
             if (!res.ok) {
                 $('uploadOutput').classList.remove('hidden');
                 $('uploadOutput').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-                toast((data?.message) || 'Upload thất bại', 'error');
+                toast(data?.message || 'Upload thất bại', 'error');
             } else {
                 toast(data.message || 'Upload thành công!', 'success');
                 closeModal();
                 setTimeout(() => window.location.reload(), 800);
             }
-        } catch {
-            toast('Lỗi kết nối khi upload', 'error');
-        } finally {
-            btn.disabled = false;
-            btn.textContent = 'Upload file';
-        }
+        } catch { toast('Lỗi kết nối khi upload', 'error'); }
+        finally { btn.disabled = false; btn.textContent = 'Upload file'; }
     }
 
-    /* ── download ───────────────────────────────────────────────── */
+    /* ── download ───────────────────────────────── */
     function downloadFile(btn) {
-        const { appSlug, channel, filename } = btn.dataset;
-        const input = findOtpInput(appSlug, channel, filename);
-        const otp   = input?.value?.trim() ?? '';
+        const { hash, filename, requiresOtp } = btn.dataset;
+        const otp = requiresOtp === '1' ? (findOtpInput(hash)?.value?.trim() ?? '') : '';
 
-        if (input?.dataset?.downloadRequiresOtp === '1' && !otp) {
+        if (requiresOtp === '1' && !otp) {
             toast('Nhập OTP trước khi tải file', 'warning');
-            input.focus();
+            findOtpInput(hash)?.focus();
             return;
         }
 
         const form = $('downloadForm');
-        form.elements.app_slug.value = appSlug;
-        form.elements.channel.value  = channel;
         form.elements.filename.value = filename;
         form.elements.otp.value      = otp;
         form.submit();
     }
 
-    /* ── delete ─────────────────────────────────────────────────── */
+    /* ── delete ─────────────────────────────────── */
     async function deleteFile(btn) {
-        const { appSlug, channel, filename } = btn.dataset;
-        const input = findOtpInput(appSlug, channel, filename);
-        const otp   = input?.value?.trim() ?? '';
+        const { hash, filename } = btn.dataset;
+        const otp = findOtpInput(hash)?.value?.trim() ?? '';
 
-        if (!otp) {
-            toast('Nhập OTP trước khi xóa', 'warning');
-            input?.focus();
-            return;
-        }
-
+        if (!otp) { toast('Nhập OTP trước khi xóa', 'warning'); findOtpInput(hash)?.focus(); return; }
         if (!confirm(`Xóa file "${filename}"?`)) return;
 
         btn.disabled = true;
-
         try {
             const res  = await fetch(deleteWithOtpUrl, {
                 method: 'POST',
                 credentials: 'same-origin',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'Accept': 'application/json',
-                    'X-CSRF-TOKEN': csrfToken,
-                },
-                body: new URLSearchParams({ app_slug: appSlug, channel, filename, otp }),
+                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+                body: new URLSearchParams({ filename, otp }),
             });
             const data = await parseResponse(res);
-
-            if (res.ok) {
-                toast(data.message || 'Đã xóa file', 'success');
-                setTimeout(() => window.location.reload(), 800);
-            } else {
-                toast((data?.message) || 'Xóa thất bại', 'error');
-                btn.disabled = false;
-            }
-        } catch {
-            toast('Lỗi kết nối', 'error');
-            btn.disabled = false;
-        }
+            if (res.ok) { toast(data.message || 'Đã xóa file', 'success'); setTimeout(() => window.location.reload(), 800); }
+            else { toast(data?.message || 'Xóa thất bại', 'error'); btn.disabled = false; }
+        } catch { toast('Lỗi kết nối', 'error'); btn.disabled = false; }
     }
 
-    /* ── event listeners ────────────────────────────────────────── */
+    /* ── listeners ──────────────────────────────── */
     $('openUploadBtn').addEventListener('click', openModal);
     $('closeUploadBtn').addEventListener('click', closeModal);
     $('uploadModal').addEventListener('click', (e) => { if (e.target === $('uploadModal')) closeModal(); });
@@ -598,15 +460,7 @@
     $('requestUploadOtpBtn').addEventListener('click', requestUploadOtp);
     $('otpProtected').addEventListener('change', syncOtpSection);
 
-    document.addEventListener('DOMContentLoaded', () => {
-        syncOtpSection();
-
-        const sel = document.querySelector('[data-selected="1"]');
-        if (sel) sel.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-        const selOtp = document.querySelector('[data-otp-input="1"]');
-        if (selOtp) selOtp.focus();
-    });
+    document.addEventListener('DOMContentLoaded', () => syncOtpSection());
 </script>
 </body>
 </html>
