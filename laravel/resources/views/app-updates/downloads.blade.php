@@ -85,6 +85,7 @@
                                             data-app-slug="{{ $file['app_slug'] }}"
                                             data-channel="{{ $file['channel'] }}"
                                             data-filename="{{ $file['filename'] }}"
+                                            data-download-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
                                         >
                                     </div>
                                 </td>
@@ -145,7 +146,14 @@
                         <input id="file" type="file" required class="w-full rounded-xl border border-slate-300 px-4 py-3">
                     </div>
 
-                    <div class="grid gap-4 md:grid-cols-[1fr_auto] items-end">
+                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+                        <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
+                            <input id="otpProtected" type="checkbox" checked class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                            Upload file cần OTP
+                        </label>
+                    </div>
+
+                    <div id="uploadOtpSection" class="grid gap-4 md:grid-cols-[1fr_auto] items-end">
                         <div>
                             <label class="mb-2 block text-sm font-medium text-slate-700">OTP upload</label>
                             <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
@@ -187,6 +195,7 @@
         const getEl = (id) => document.getElementById(id);
         const getToken = () => getEl('token').value.trim();
         const getUploadOtp = () => getEl('uploadOtp').value.trim();
+        const isOtpProtected = () => getEl('otpProtected')?.checked ?? true;
 
         function showOutput(el, payload) {
             if (!el) return;
@@ -208,6 +217,12 @@
         function closeUploadModal() {
             getEl('uploadModal').classList.add('hidden');
             getEl('uploadModal').classList.remove('flex');
+        }
+
+        function syncUploadOtpVisibility() {
+            const section = getEl('uploadOtpSection');
+            if (!section) return;
+            section.classList.toggle('hidden', !isOtpProtected());
         }
 
         function findOtpInput(appSlug, channel, filename) {
@@ -241,6 +256,11 @@
         }
 
         async function requestUploadOtp() {
+            if (!isOtpProtected()) {
+                alert('Bạn đã chọn upload không cần OTP');
+                return;
+            }
+
             const token = getToken();
             if (!token) {
                 alert('Nhập Security Code trước khi gửi OTP upload');
@@ -291,7 +311,7 @@
                 return;
             }
 
-            if (!getUploadOtp()) {
+            if (isOtpProtected() && !getUploadOtp()) {
                 alert('Nhập OTP upload trước khi upload');
                 getEl('uploadBtn').disabled = false;
                 return;
@@ -308,7 +328,7 @@
             formData.append('app_slug', defaultAppSlug);
             formData.append('channel', defaultChannel);
             formData.append('version', defaultVersion);
-            formData.append('otp_protected', '1');
+            formData.append('otp_protected', isOtpProtected() ? '1' : '0');
             formData.append('otp', getUploadOtp());
             formData.append('file', file);
 
@@ -347,7 +367,9 @@
             const otpInput = findOtpInput(appSlug, channel, filename);
             const otp = otpInput?.value?.trim() || '';
 
-            if (!otp) {
+            const requiresOtp = otpInput?.dataset?.downloadRequiresOtp === '1';
+
+            if (requiresOtp && !otp) {
                 alert('Nhập OTP trước khi tải file');
                 otpInput?.focus();
                 return;
@@ -409,8 +431,11 @@
         document.getElementById('requestUploadOtpBtn').addEventListener('click', requestUploadOtp);
         document.getElementById('openUploadModalBtn').addEventListener('click', openUploadModal);
         document.getElementById('closeUploadModalBtn').addEventListener('click', closeUploadModal);
+        document.getElementById('otpProtected').addEventListener('change', syncUploadOtpVisibility);
 
         document.addEventListener('DOMContentLoaded', () => {
+            syncUploadOtpVisibility();
+
             const selectedRow = document.querySelector('[data-selected="1"]');
             const selectedOtpInput = document.querySelector('[data-otp-input="1"]');
 

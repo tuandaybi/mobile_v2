@@ -357,15 +357,14 @@ class AppUpdateController extends Controller
 
         abort_unless(Storage::disk('public')->exists($path), 404, 'Khong tim thay file.');
 
-        if ($this->releaseRequiresOtp($appSlug, $channel, $filename)) {
             $isValid = $this->consumeDownloadOtp($request->ip(), $appSlug, $channel, $filename, (string) ($validated['otp'] ?? ''));
 
-            if (!$isValid) {
-                return response()->json([
-                    'message' => 'OTP khong dung hoac da het han.',
-                ], 422);
-            }
+        if (!$isValid) {
+            return response()->json([
+                'message' => 'OTP khong dung hoac da het han.',
+            ], 422);
         }
+
 
         Storage::disk('public')->delete($path);
 
