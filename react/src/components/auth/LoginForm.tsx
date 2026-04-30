@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Form, Input, Button, message, Checkbox } from 'antd';
 import { useNavigate, Link } from 'react-router-dom';
-import api from 'axiosConfig'; // Import axios config
+import api from '@/../axiosConfig'; // Import axios config
 
 const LoginForm: React.FC = () => {
   const navigate = useNavigate();

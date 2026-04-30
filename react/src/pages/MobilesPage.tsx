@@ -6,7 +6,7 @@ import type { ColumnsType } from "antd/es/table";
 import dayjs from "dayjs";
 import { useModalStore } from "../store/modalStore";
 import PageTable from "@/components/shared/PageTable";
-import api from "axiosConfig";
+import api from "@/../axiosConfig";
 
 const fVND = (n: number) => `${Number(n || 0).toLocaleString()} đ`;
 
