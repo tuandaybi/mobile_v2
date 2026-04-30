@@ -32,37 +32,13 @@
         <section class="rounded-2xl bg-white border border-slate-200 shadow-sm p-6">
             <div class="mb-6">
                 <h2 class="text-xl font-semibold">Upload file</h2>
-                <p class="text-sm text-slate-500 mt-1">Nhập Security Code, gửi OTP upload qua Telegram rồi xác nhận để phát hành file.</p>
+                <p class="text-sm text-slate-500 mt-1">Nhập Security Code, lấy OTP rồi upload file.</p>
             </div>
 
             <form id="uploadForm" class="space-y-4">
                 <div>
                     <label class="mb-2 block text-sm font-medium text-slate-700">Security Code</label>
                     <input id="token" type="password" placeholder="Bearer token" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
-                </div>
-
-                <div class="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">Mã ứng dụng</label>
-                        <input id="appSlug" type="text" value="tiktok-bot" required class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">Kênh</label>
-                        <input id="channel" type="text" value="app" required class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">Phiên bản</label>
-                        <input id="version" type="text" value="1.0.0" required class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
-                    </div>
-                    <div>
-                        <label class="mb-2 block text-sm font-medium text-slate-700">Bắt buộc</label>
-                        <input id="mandatory" type="text" value="1" placeholder="1 hoặc 0" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
-                    </div>
-                </div>
-
-                <div>
-                    <label class="mb-2 block text-sm font-medium text-slate-700">Ghi chú</label>
-                    <textarea id="notes" class="min-h-[100px] w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">Phiên bản được tải lên từ bảng điều khiển cập nhật.</textarea>
                 </div>
 
                 <div>
@@ -76,7 +52,7 @@
                         <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
                     </div>
                     <button id="requestUploadOtpBtn" type="button" class="rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600 transition">
-                        Gửi OTP upload
+                        Lấy OTP
                     </button>
                 </div>
 
@@ -137,7 +113,7 @@
                                         class="w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600 transition"
                                         onclick="requestOtp(this.form)"
                                     >
-                                        Gửi OTP qua Telegram
+                                        Lấy OTP
                                     </button>
                                 </form>
 
@@ -175,6 +151,11 @@
     <script>
         const publishUrl = @json($publishUrl);
         const requestUploadOtpUrl = @json($requestUploadOtpUrl);
+        const defaultAppSlug = 'tiktok-bot';
+        const defaultChannel = 'app';
+        const defaultVersion = '1.0.0';
+        const defaultMandatory = '1';
+        const defaultNotes = 'Phiên bản được tải lên từ bảng điều khiển cập nhật.';
 
         const getEl = (id) => document.getElementById(id);
         const getToken = () => getEl('token').value.trim();
@@ -225,14 +206,9 @@
                 return;
             }
 
-            const appSlug = getEl('appSlug').value.trim();
-            const channel = getEl('channel').value.trim() || 'app';
-            const version = getEl('version').value.trim();
-
-            if (!appSlug || !version) {
-                alert('Nhập app slug và version trước khi gửi OTP upload');
-                return;
-            }
+            const appSlug = defaultAppSlug;
+            const channel = defaultChannel;
+            const version = defaultVersion;
 
             const btn = getEl('requestUploadOtpBtn');
             btn.disabled = true;
@@ -292,11 +268,11 @@
             }
 
             const formData = new FormData();
-            formData.append('app_slug', getEl('appSlug').value.trim());
-            formData.append('channel', getEl('channel').value.trim() || 'app');
-            formData.append('version', getEl('version').value.trim());
-            formData.append('notes', getEl('notes').value);
-            formData.append('mandatory', getEl('mandatory').value);
+            formData.append('app_slug', defaultAppSlug);
+            formData.append('channel', defaultChannel);
+            formData.append('version', defaultVersion);
+            formData.append('notes', defaultNotes);
+            formData.append('mandatory', defaultMandatory);
             formData.append('otp', getUploadOtp());
             formData.append('file', file);
 
