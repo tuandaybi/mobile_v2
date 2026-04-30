@@ -27,7 +27,8 @@ class TelegramNotification extends Notification
     {
         return TelegramMessage::create()
             ->to(env('TELEGRAM_CHAT_ID'))
-            ->content($this->message);
+            ->content($this->message)
+            ->options(['parse_mode' => '']);
     }
 
     // ✅ static helper
