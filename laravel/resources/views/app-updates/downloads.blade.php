@@ -256,17 +256,11 @@
     </div>
 </div>
 
-{{-- Hidden download form --}}
-<form id="downloadForm" method="POST" action="{{ route('app-updates.verify-otp', [], false) }}" class="hidden">
-    @csrf
-    <input type="hidden" name="filename">
-    <input type="hidden" name="otp">
-</form>
-
 <script>
     const uploadUrl           = @json($uploadUrl);
     const requestUploadOtpUrl = @json($requestUploadOtpUrl);
     const deleteWithOtpUrl    = @json($deleteWithOtpUrl);
+    const verifyDownloadUrl   = '{{ route("app-updates.verify-otp", [], false) }}';
     const csrfToken           = document.querySelector('meta[name="csrf-token"]')?.content ?? '';
 
     const $ = (id) => document.getElementById(id);
@@ -438,7 +432,10 @@
         const { filename, requiresOtp } = btn.dataset;
 
         if (requiresOtp === '0') {
-            submitDownloadForm(filename, '');
+            btn.disabled = true;
+            try { await doDownload(filename, ''); }
+            catch (e) { toast(e.message, 'error'); }
+            finally { btn.disabled = false; }
             return;
         }
 
@@ -478,12 +475,15 @@
 
         try {
             if (_otpAction.type === 'download') {
+                const filename = _otpAction.filename;
                 closeOtpModal();
-                submitDownloadForm(_otpAction.filename, otp);
+                await doDownload(filename, otp);
             } else {
                 await doDelete(_otpAction.filename, otp);
                 closeOtpModal();
             }
+        } catch (e) {
+            toast(e.message, 'error');
         } finally { btn.disabled = false; btn.textContent = 'Xác nhận'; }
     }
 
@@ -503,11 +503,22 @@
     }
 
     /* ── helpers ─────────────────────────────────── */
-    function submitDownloadForm(filename, otp) {
-        const form = $('downloadForm');
-        form.elements.filename.value = filename;
-        form.elements.otp.value      = otp;
-        form.submit();
+    async function doDownload(filename, otp) {
+        const res = await fetch(verifyDownloadUrl, {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'X-CSRF-TOKEN': csrfToken },
+            body: new URLSearchParams({ filename, otp }),
+        });
+        if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data?.message || 'Tải file thất bại.');
+        }
+        const blob = await res.blob();
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href = url; a.download = filename;
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 10000);
     }
 
     async function doDelete(filename, otp) {

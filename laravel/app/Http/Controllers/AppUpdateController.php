@@ -147,12 +147,20 @@ class AppUpdateController extends Controller
             $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
             $cached = Cache::get($key);
             if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+                if ($request->expectsJson() || $request->ajax()) {
+                    return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
+                }
                 return back()->withInput()->withErrors(['otp' => 'OTP không đúng hoặc đã hết hạn.']);
             }
             Cache::forget($key);
         }
 
-        $this->appendDownloadLog($request->ip(), $filename, '-', '-');
+        try {
+            $this->appendDownloadLog($request->ip(), $filename, '-', '-');
+        } catch (\Throwable $e) {
+            // log failure should not block download
+        }
+
         return Storage::disk('public')->download($path, $filename, ['Content-Type' => 'application/octet-stream']);
     }
 
