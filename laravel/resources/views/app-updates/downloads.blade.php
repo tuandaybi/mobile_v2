@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>File Server</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
@@ -202,6 +203,7 @@
         const defaultVersion = '1.0.0';
         const defaultMandatory = '1';
         const defaultNotes = 'Phiên bản được tải lên từ bảng điều khiển cập nhật.';
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         const getEl = (id) => document.getElementById(id);
         const getToken = () => getEl('token').value.trim();
@@ -413,9 +415,11 @@
 
             const response = await fetch(deleteWithOtpUrl, {
                 method: 'POST',
+                credentials: 'same-origin',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                     'Accept': 'application/json',
+                    'X-CSRF-TOKEN': csrfToken,
                 },
                 body: new URLSearchParams({
                     app_slug: appSlug,
