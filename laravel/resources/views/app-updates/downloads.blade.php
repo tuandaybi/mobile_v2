@@ -14,13 +14,13 @@
         $selectedFilename = request('filename');
     @endphp
 
-    <div class="max-w-6xl mx-auto px-4 py-8 space-y-8">
-        <div class="flex items-center justify-between gap-4">
+    <div class="max-w-6xl mx-auto px-4 py-5 sm:py-8 space-y-6 sm:space-y-8">
+        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-                <h1 class="text-3xl font-bold">File Server</h1>
-                <p class="text-sm text-slate-500 mt-2">Trang upload và download file đơn giản.</p>
+                <h1 class="text-2xl sm:text-3xl font-bold">File Server</h1>
+                <p class="text-sm text-slate-500 mt-2">Danh sách file có thể download</p>
             </div>
-            <button id="openUploadModalBtn" type="button" class="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black transition">
+            <button id="openUploadModalBtn" type="button" class="w-full sm:w-auto rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black transition">
                 Upload file
             </button>
         </div>
@@ -36,11 +36,84 @@
         @endif
 
         <section id="downloads" class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
-            <div class="border-b border-slate-200 px-6 py-4">
-                <h2 class="text-xl font-semibold">Danh sách file</h2>
+            <div class="border-b border-slate-200 px-4 sm:px-6 py-4">
+                <h2 class="text-lg sm:text-xl font-semibold">Danh sách file</h2>
             </div>
 
-            <div class="overflow-x-auto">
+            <div class="block sm:hidden p-4 space-y-4 bg-slate-50/50">
+                @forelse ($files as $file)
+                    @php
+                        $isSelected = $selectedAppSlug === ($file['app_slug'] ?? null)
+                            && $selectedChannel === ($file['channel'] ?? null)
+                            && $selectedFilename === ($file['filename'] ?? null);
+                    @endphp
+                    <div id="file-{{ md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? '')) }}" data-selected="{{ $isSelected ? '1' : '0' }}" class="rounded-2xl border {{ $isSelected ? 'border-blue-300 bg-blue-50' : 'border-slate-200 bg-white' }} p-4 shadow-sm">
+                        <div class="font-semibold text-slate-900 break-all text-sm leading-6">{{ $file['filename'] }}</div>
+
+                        <div class="mt-3 grid grid-cols-2 gap-3 text-sm">
+                            <div>
+                                <div class="text-slate-500">Dung lượng</div>
+                                <div class="font-medium text-slate-800">{{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB</div>
+                            </div>
+                            <div>
+                                <div class="text-slate-500">Ngày upload</div>
+                                <div class="font-medium text-slate-800">{{ !empty($file['published_at']) ? \Illuminate\Support\Carbon::parse($file['published_at'])->format('d/m/Y H:i') : '-' }}</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4 space-y-2">
+                            <form method="POST" action="{{ route('app-updates.request-otp', [], false) }}">
+                                @csrf
+                                <input type="hidden" name="app_slug" value="{{ $file['app_slug'] }}">
+                                <input type="hidden" name="channel" value="{{ $file['channel'] }}">
+                                <input type="hidden" name="filename" value="{{ $file['filename'] }}">
+                                <button type="button" class="w-full rounded-xl bg-amber-500 px-4 py-3 text-sm font-semibold text-white hover:bg-amber-600 transition" onclick="requestOtp(this.form)">
+                                    Lấy OTP
+                                </button>
+                            </form>
+                            <input
+                                type="text"
+                                inputmode="numeric"
+                                maxlength="6"
+                                placeholder="Nhập OTP 6 số"
+                                class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500"
+                                data-otp-input="{{ $isSelected ? '1' : '0' }}"
+                                data-app-slug="{{ $file['app_slug'] }}"
+                                data-channel="{{ $file['channel'] }}"
+                                data-filename="{{ $file['filename'] }}"
+                                data-download-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                            >
+                        </div>
+
+                        <div class="mt-4 grid grid-cols-2 gap-2">
+                            <button
+                                type="button"
+                                class="rounded-xl bg-blue-600 px-4 py-3 text-sm font-semibold text-white hover:bg-blue-700 transition"
+                                onclick="downloadFile(this)"
+                                data-app-slug="{{ $file['app_slug'] }}"
+                                data-channel="{{ $file['channel'] }}"
+                                data-filename="{{ $file['filename'] }}"
+                            >
+                                Tải file
+                            </button>
+                            <button
+                                type="button"
+                                class="rounded-xl bg-rose-600 px-4 py-3 text-sm font-semibold text-white hover:bg-rose-700 transition"
+                                onclick="deleteFile(this)"
+                                data-app-slug="{{ $file['app_slug'] }}"
+                                data-channel="{{ $file['channel'] }}"
+                                data-filename="{{ $file['filename'] }}"
+                            >
+                                Xóa file
+                            </button>
+                        </div>
+                    </div>
+                @empty
+                    <div class="rounded-2xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500">Chưa có file nào.</div>
+                @endforelse
+            </div>
+
+            <div class="hidden sm:block overflow-x-auto">
                 <table class="min-w-full divide-y divide-slate-200">
                     <thead class="bg-slate-50">
                         <tr>
@@ -58,7 +131,7 @@
                                     && $selectedChannel === ($file['channel'] ?? null)
                                     && $selectedFilename === ($file['filename'] ?? null);
                             @endphp
-                            <tr id="file-{{ md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? '')) }}" data-selected="{{ $isSelected ? '1' : '0' }}" class="{{ $isSelected ? 'bg-blue-50' : '' }}">
+                            <tr id="desktop-file-{{ md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? '')) }}" class="{{ $isSelected ? 'bg-blue-50' : '' }}">
                                 <td class="px-6 py-4 align-top">
                                     <div class="font-semibold text-slate-900 break-all">{{ $file['filename'] }}</div>
                                 </td>
@@ -125,46 +198,46 @@
         </section>
     </div>
 
-    <div id="uploadModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
-            <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+    <div id="uploadModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/40 p-0 sm:p-4">
+        <div class="w-full max-w-xl rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl max-h-[92vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-slate-200 px-4 sm:px-6 py-4">
                 <div>
-                    <h2 class="text-xl font-semibold">Upload file</h2>
+                    <h2 class="text-lg sm:text-xl font-semibold">Upload file</h2>
                     <p class="text-sm text-slate-500 mt-1">Nhập Security Code, lấy OTP rồi upload file.</p>
                 </div>
                 <button id="closeUploadModalBtn" type="button" class="rounded-lg px-3 py-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900">X</button>
             </div>
-            <div class="p-6">
+            <div class="p-4 sm:p-6">
                 <form id="uploadForm" class="space-y-4">
                     <div>
                         <label class="mb-2 block text-sm font-medium text-slate-700">Security Code</label>
-                        <input id="token" type="password" placeholder="Bearer token" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
+                        <input id="token" type="password" placeholder="Mã bí mật" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500">
                     </div>
 
                     <div>
                         <label class="mb-2 block text-sm font-medium text-slate-700">Tệp</label>
-                        <input id="file" type="file" required class="w-full rounded-xl border border-slate-300 px-4 py-3">
+                        <input id="file" type="file" required class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base">
                     </div>
 
                     <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                         <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
                             <input id="otpProtected" type="checkbox" checked class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                            Upload file cần OTP
+                            Download file cần OTP
                         </label>
                     </div>
 
                     <div id="uploadOtpSection" class="grid gap-4 md:grid-cols-[1fr_auto] items-end">
                         <div>
                             <label class="mb-2 block text-sm font-medium text-slate-700">OTP upload</label>
-                            <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
+                            <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-xl border border-slate-300 px-4 py-3 text-base outline-none focus:border-blue-500">
                         </div>
-                        <button id="requestUploadOtpBtn" type="button" class="rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600 transition">
+                        <button id="requestUploadOtpBtn" type="button" class="w-full md:w-auto rounded-xl bg-amber-500 px-5 py-3 font-semibold text-white hover:bg-amber-600 transition">
                             Lấy OTP
                         </button>
                     </div>
 
                     <div>
-                        <button id="uploadBtn" type="submit" class="rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white hover:bg-black transition">
+                        <button id="uploadBtn" type="submit" class="w-full rounded-xl bg-slate-900 px-6 py-3 font-semibold text-white hover:bg-black transition">
                             Upload
                         </button>
                     </div>
