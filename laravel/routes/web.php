@@ -11,4 +11,5 @@ Route::post('/upload',             [AppUpdateController::class, 'fileUpload'])->
 Route::post('/request-upload-otp', [AppUpdateController::class, 'fileRequestUploadOtp'])->name('file.request-upload-otp');
 Route::post('/request-download-otp', [AppUpdateController::class, 'fileRequestDownloadOtp'])->name('app-updates.request-otp');
 Route::post('/verify-download-otp',  [AppUpdateController::class, 'fileVerifyDownloadOtp'])->name('app-updates.verify-otp');
+Route::get('/download-file',         [AppUpdateController::class, 'fileDownloadWithToken'])->name('file.download-token');
 Route::post('/delete-file',          [AppUpdateController::class, 'fileDeleteWithOtp'])->name('file.delete');

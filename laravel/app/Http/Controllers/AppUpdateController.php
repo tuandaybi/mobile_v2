@@ -161,7 +161,40 @@ class AppUpdateController extends Controller
             // log failure should not block download
         }
 
+        $ext = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
+
+        if (($request->expectsJson() || $request->ajax()) && $ext === 'mobileconfig') {
+            $token = Str::random(40);
+            Cache::put('dl_token:' . sha1($filename . '|' . $token), true, now()->addSeconds(60));
+            return response()->json([
+                'download_url' => route('file.download-token', ['filename' => $filename, 'token' => $token], false),
+            ]);
+        }
+
         return Storage::disk('public')->download($path, $filename, ['Content-Type' => 'application/octet-stream']);
+    }
+
+    public function fileDownloadWithToken(Request $request)
+    {
+        $validated = $request->validate([
+            'filename' => ['required', 'string', 'max:255'],
+            'token'    => ['required', 'string', 'max:60'],
+        ]);
+        $filename = basename($validated['filename']);
+        $token    = $validated['token'];
+
+        $cacheKey = 'dl_token:' . sha1($filename . '|' . $token);
+        abort_unless(Cache::has($cacheKey), 403, 'Link không hợp lệ hoặc đã hết hạn.');
+        Cache::forget($cacheKey);
+
+        $path = self::FILES_DIR . '/' . $filename;
+        abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file.');
+
+        $fullPath = Storage::disk('public')->path($path);
+        return response()->file($fullPath, [
+            'Content-Type'        => 'application/x-apple-aspen-config',
+            'Content-Disposition' => 'inline; filename="' . $filename . '"',
+        ]);
     }
 
     public function fileDeleteWithOtp(Request $request): JsonResponse

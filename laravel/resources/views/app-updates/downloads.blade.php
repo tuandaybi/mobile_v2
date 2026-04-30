@@ -513,6 +513,11 @@
             const data = await res.json().catch(() => ({}));
             throw new Error(data?.message || 'Tải file thất bại.');
         }
+        const contentType = res.headers.get('Content-Type') || '';
+        if (contentType.includes('application/json')) {
+            const data = await res.json();
+            if (data.download_url) { window.location.href = data.download_url; return; }
+        }
         const blob = await res.blob();
         const url  = URL.createObjectURL(blob);
         const a    = document.createElement('a');
