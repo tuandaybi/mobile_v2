@@ -9,8 +9,8 @@
     <style>
         .toast-enter { animation: toastIn .25s ease forwards; }
         .toast-leave { animation: toastOut .25s ease forwards; }
-        @keyframes toastIn  { from { opacity:0; transform:translateY(12px); } to { opacity:1; transform:translateY(0); } }
-        @keyframes toastOut { from { opacity:1; transform:translateY(0); } to { opacity:0; transform:translateY(12px); } }
+        @keyframes toastIn  { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+        @keyframes toastOut { from{opacity:1;transform:translateY(0)} to{opacity:0;transform:translateY(12px)} }
     </style>
 </head>
 <body class="bg-zinc-100 min-h-screen text-zinc-900 antialiased">
@@ -60,7 +60,6 @@
             {{-- Mobile cards --}}
             <div class="block sm:hidden divide-y divide-zinc-100">
                 @foreach ($files as $file)
-                    @php $hash = md5($file['filename'] ?? ''); @endphp
                     <div class="p-4">
                         <div class="flex items-start justify-between gap-2">
                             <span class="font-medium text-sm break-all leading-5">{{ $file['filename'] }}</span>
@@ -70,47 +69,25 @@
                                 <span class="shrink-0 rounded-md bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-500">Tự do</span>
                             @endif
                         </div>
-
-                        <div class="mt-2 flex gap-4 text-xs text-zinc-500">
+                        <div class="mt-1.5 flex gap-4 text-xs text-zinc-500">
                             <span>{{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB</span>
                             <span>{{ !empty($file['published_at']) ? \Illuminate\Support\Carbon::parse($file['published_at'])->format('d/m/Y H:i') : '-' }}</span>
                         </div>
-
-                        <div class="mt-3 space-y-2">
-                            @if ($file['otp_protected'] ?? true)
-                                <div class="flex gap-2">
-                                    <input type="text" inputmode="numeric" maxlength="6"
-                                        placeholder="Nhập OTP 6 số"
-                                        class="flex-1 rounded-lg border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                        data-otp-for="{{ $hash }}">
-                                    <button type="button"
-                                        class="rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
-                                        data-file-id="m-{{ $hash }}"
-                                        data-filename="{{ $file['filename'] }}"
-                                        onclick="requestDownloadOtp(this)">
-                                        Lấy OTP
-                                    </button>
-                                </div>
-                                <div id="actions-m-{{ $hash }}" class="hidden gap-2">
-                            @else
-                                <div class="flex gap-2">
-                            @endif
-                                <button type="button"
-                                    class="flex-1 rounded-lg bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
-                                    data-hash="{{ $hash }}"
-                                    data-filename="{{ $file['filename'] }}"
-                                    data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
-                                    onclick="downloadFile(this)">
-                                    Tải file
-                                </button>
-                                <button type="button"
-                                    class="flex-1 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
-                                    data-hash="{{ $hash }}"
-                                    data-filename="{{ $file['filename'] }}"
-                                    onclick="deleteFile(this)">
-                                    Xóa
-                                </button>
-                            </div>
+                        <div class="mt-3 flex gap-2">
+                            <button type="button"
+                                class="flex-1 rounded-lg bg-blue-600 px-3 py-2.5 text-sm font-semibold text-white hover:bg-blue-700 transition-colors"
+                                data-filename="{{ $file['filename'] }}"
+                                data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                                onclick="handleDownload(this)">
+                                Tải file
+                            </button>
+                            <button type="button"
+                                class="flex-1 rounded-lg bg-rose-50 border border-rose-200 px-3 py-2.5 text-sm font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
+                                data-filename="{{ $file['filename'] }}"
+                                data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                                onclick="handleDelete(this)">
+                                Xóa
+                            </button>
                         </div>
                     </div>
                 @endforeach
@@ -124,70 +101,47 @@
                             <th class="px-5 py-3 text-left">File</th>
                             <th class="px-5 py-3 text-left">Dung lượng</th>
                             <th class="px-5 py-3 text-left">Ngày upload</th>
-                            <th class="px-5 py-3 text-left w-52">OTP download</th>
                             <th class="px-5 py-3 text-right">Thao tác</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-zinc-100">
                         @foreach ($files as $file)
-                            @php $hash = md5($file['filename'] ?? ''); @endphp
                             <tr class="hover:bg-zinc-50/50 transition-colors">
-
                                 <td class="px-5 py-3.5">
                                     <div class="flex items-center gap-2">
-                                        <div class="shrink-0 rounded-lg bg-zinc-100 p-2">
+                                        <div class="shrink-0 rounded-lg bg-zinc-100 p-1.5">
                                             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-zinc-500" viewBox="0 0 20 20" fill="currentColor">
                                                 <path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4z" clip-rule="evenodd"/>
                                             </svg>
                                         </div>
-                                        <span class="font-medium text-sm break-all">{{ $file['filename'] }}</span>
+                                        <div>
+                                            <div class="font-medium text-sm break-all">{{ $file['filename'] }}</div>
+                                            @if ($file['otp_protected'] ?? true)
+                                                <span class="text-xs text-amber-600 font-medium">OTP</span>
+                                            @endif
+                                        </div>
                                     </div>
                                 </td>
-
                                 <td class="px-5 py-3.5 text-sm text-zinc-600 whitespace-nowrap">
                                     {{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB
                                 </td>
-
                                 <td class="px-5 py-3.5 text-sm text-zinc-600 whitespace-nowrap">
                                     {{ !empty($file['published_at']) ? \Illuminate\Support\Carbon::parse($file['published_at'])->format('d/m/Y H:i') : '-' }}
                                 </td>
-
                                 <td class="px-5 py-3.5">
-                                    @if ($file['otp_protected'] ?? true)
-                                        <div class="flex items-center gap-1.5">
-                                            <input type="text" inputmode="numeric" maxlength="6"
-                                                placeholder="6 chữ số"
-                                                class="w-24 rounded-lg border border-zinc-300 px-2.5 py-1.5 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                                                data-otp-for="{{ $hash }}">
-                                            <button type="button"
-                                                class="rounded-lg bg-amber-500 px-2.5 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 transition-colors whitespace-nowrap"
-                                                data-file-id="d-{{ $hash }}"
-                                                data-filename="{{ $file['filename'] }}"
-                                                onclick="requestDownloadOtp(this)">
-                                                Lấy OTP
-                                            </button>
-                                        </div>
-                                    @else
-                                        <span class="text-xs text-zinc-300">—</span>
-                                    @endif
-                                </td>
-
-                                <td class="px-5 py-3.5">
-                                    <div id="actions-d-{{ $hash }}"
-                                        class="{{ ($file['otp_protected'] ?? true) ? 'hidden' : 'flex' }} items-center justify-end gap-2">
+                                    <div class="flex items-center justify-end gap-2">
                                         <button type="button"
                                             class="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 transition-colors"
-                                            data-hash="{{ $hash }}"
                                             data-filename="{{ $file['filename'] }}"
                                             data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
-                                            onclick="downloadFile(this)">
+                                            onclick="handleDownload(this)">
                                             Tải file
                                         </button>
                                         <button type="button"
                                             class="rounded-lg border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-semibold text-rose-600 hover:bg-rose-100 transition-colors"
-                                            data-hash="{{ $hash }}"
                                             data-filename="{{ $file['filename'] }}"
-                                            onclick="deleteFile(this)">
+                                            data-requires-otp="{{ ($file['otp_protected'] ?? true) ? '1' : '0' }}"
+                                            onclick="handleDelete(this)">
                                             Xóa
                                         </button>
                                     </div>
@@ -200,21 +154,25 @@
         @endif
 
         @if ($files->hasPages())
-            <div class="border-t border-zinc-100 px-5 py-3">
-                {{ $files->links() }}
-            </div>
+            <div class="border-t border-zinc-100 px-5 py-3">{{ $files->links() }}</div>
         @endif
     </div>
 </div>
 
-{{-- Upload Modal --}}
+{{-- ═══════════════════════════════════════════
+     UPLOAD MODAL (multi-step)
+═══════════════════════════════════════════ --}}
 <div id="uploadModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
-    <div class="w-full max-w-lg rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl max-h-[96vh] overflow-y-auto">
+    <div class="w-full max-w-md rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl max-h-[96vh] overflow-y-auto">
 
         <div class="flex items-center justify-between border-b border-zinc-100 px-5 py-4">
             <div>
-                <h2 class="font-semibold text-base">Upload file mới</h2>
-                <p class="text-xs text-zinc-500 mt-0.5">Xác thực bằng Security Code + OTP</p>
+                <h2 id="uploadModalTitle" class="font-semibold text-base">Upload file</h2>
+                <div class="flex items-center gap-1 mt-1.5">
+                    <span id="dot1" class="h-2 w-2 rounded-full bg-zinc-900 transition-colors"></span>
+                    <span id="dot2" class="h-2 w-2 rounded-full bg-zinc-200 transition-colors"></span>
+                    <span id="dot3" class="h-2 w-2 rounded-full bg-zinc-200 transition-colors"></span>
+                </div>
             </div>
             <button id="closeUploadBtn" type="button"
                 class="rounded-lg p-1.5 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 transition-colors">
@@ -224,17 +182,16 @@
             </button>
         </div>
 
-        <form id="uploadForm" class="p-5 space-y-4">
-
+        {{-- Step 1: chọn file --}}
+        <div id="uploadStep1" class="p-5 space-y-4">
             <div>
                 <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">Security Code</label>
                 <input id="token" type="password" autocomplete="off" placeholder="Bearer token"
                     class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
             </div>
-
             <div>
                 <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">File</label>
-                <label class="flex flex-col items-center gap-2 w-full cursor-pointer rounded-xl border-2 border-dashed border-zinc-300 px-4 py-5 text-center hover:border-blue-400 hover:bg-blue-50/30 transition">
+                <label class="flex flex-col items-center gap-2 w-full cursor-pointer rounded-xl border-2 border-dashed border-zinc-300 px-4 py-6 text-center hover:border-blue-400 hover:bg-blue-50/30 transition">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-zinc-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
                     </svg>
@@ -242,7 +199,6 @@
                     <input id="file" type="file" required class="hidden" onchange="updateFileLabel(this)">
                 </label>
             </div>
-
             <div class="flex items-center justify-between rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
                 <div>
                     <span class="text-sm font-medium text-zinc-700">Download cần OTP</span>
@@ -253,28 +209,67 @@
                     <div class="w-10 h-5 bg-zinc-200 peer-focus:ring-2 peer-focus:ring-blue-200 rounded-full peer peer-checked:bg-blue-600 after:content-[''] after:absolute after:top-0.5 after:left-0.5 after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-5"></div>
                 </label>
             </div>
-
-            <div id="uploadOtpSection" class="space-y-3">
-                <div>
-                    <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">OTP Upload</label>
-                    <div class="flex gap-2">
-                        <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số"
-                            class="flex-1 rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
-                        <button id="requestUploadOtpBtn" type="button"
-                            class="rounded-xl bg-amber-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-amber-600 transition-colors whitespace-nowrap disabled:opacity-60">
-                            Lấy OTP
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <button id="uploadBtn" type="submit"
-                class="w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-black transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed">
-                Upload file
+            <button id="uploadStep1Btn" type="button"
+                class="w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-black transition-colors disabled:opacity-60">
+                Tiếp tục
             </button>
+        </div>
 
+        {{-- Step 2: nhập OTP --}}
+        <div id="uploadStep2" class="hidden p-5 space-y-4">
+            <div class="rounded-xl bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
+                OTP đã được gửi qua Telegram. Mã có hiệu lực 5 phút.
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">Nhập OTP</label>
+                <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số"
+                    class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm text-center tracking-widest text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
+            </div>
+            <button id="uploadStep2Btn" type="button"
+                class="w-full rounded-xl bg-zinc-900 py-3 text-sm font-semibold text-white hover:bg-black transition-colors disabled:opacity-60">
+                Xác nhận &amp; Upload
+            </button>
+            <div class="flex items-center gap-3">
+                <button id="resendUploadOtpBtn" type="button" data-cooldown-key="upload"
+                    class="text-xs text-amber-600 hover:text-amber-700 disabled:text-zinc-400 disabled:cursor-not-allowed transition-colors">
+                    Gửi lại OTP
+                </button>
+                <span class="text-zinc-200">|</span>
+                <button id="uploadBackBtn" type="button" class="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+                    Quay lại
+                </button>
+            </div>
             <pre id="uploadOutput" class="hidden overflow-auto rounded-xl bg-zinc-950 p-4 text-xs text-zinc-100 leading-relaxed"></pre>
-        </form>
+        </div>
+    </div>
+</div>
+
+{{-- ═══════════════════════════════════════════
+     OTP CONFIRM MODAL (download / delete)
+═══════════════════════════════════════════ --}}
+<div id="otpModal" class="fixed inset-0 z-50 hidden items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-0 sm:p-4">
+    <div class="w-full max-w-sm rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl">
+        <div class="px-5 pt-5 pb-4">
+            <p id="otpModalLabel" class="text-sm font-semibold text-zinc-800 mb-1"></p>
+            <div class="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 text-xs text-amber-800 mb-4">
+                OTP đã được gửi qua Telegram. Mã có hiệu lực 5 phút.
+            </div>
+            <input id="otpModalInput" type="text" inputmode="numeric" maxlength="6" placeholder="6 chữ số"
+                class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm text-center tracking-widest text-lg outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition mb-3">
+            <button id="otpModalConfirmBtn" type="button"
+                class="w-full rounded-xl bg-zinc-900 py-2.5 text-sm font-semibold text-white hover:bg-black transition-colors disabled:opacity-60 mb-2">
+                Xác nhận
+            </button>
+            <div class="flex items-center justify-between">
+                <button id="resendDownloadOtpBtn" type="button"
+                    class="text-xs text-amber-600 hover:text-amber-700 disabled:text-zinc-400 disabled:cursor-not-allowed transition-colors">
+                    Gửi lại OTP
+                </button>
+                <button id="otpModalCancelBtn" type="button" class="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+                    Hủy
+                </button>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -296,16 +291,12 @@
     const getUploadOtp = () => $('uploadOtp').value.trim();
     const isOtpOn      = () => $('otpProtected').checked;
 
-    function findOtpInput(hash) {
-        return document.querySelector(`[data-otp-for="${hash}"]`);
-    }
-
     async function parseResponse(res) {
-        const text = await res.text();
-        try { return JSON.parse(text); } catch { return text; }
+        const t = await res.text();
+        try { return JSON.parse(t); } catch { return t; }
     }
 
-    /* ── toast ─────────────────────────────────── */
+    /* ── toast ───────────────────────────────────── */
     function toast(msg, type = 'info') {
         const colors = { success:'bg-emerald-600', error:'bg-rose-600', info:'bg-zinc-800', warning:'bg-amber-500' };
         const el = document.createElement('div');
@@ -318,74 +309,82 @@
         }, 3500);
     }
 
-    /* ── modal ──────────────────────────────────── */
-    function openModal()  { $('uploadModal').classList.replace('hidden', 'flex'); }
-    function closeModal() { $('uploadModal').classList.replace('flex', 'hidden'); }
-    function syncOtpSection() { $('uploadOtpSection').classList.toggle('hidden', !isOtpOn()); }
-    function updateFileLabel(input) { $('fileLabel').textContent = input.files[0]?.name ?? 'Chọn hoặc kéo thả file vào đây'; }
-
-    /* ── download OTP ───────────────────────────── */
-    async function requestDownloadOtp(btn) {
-        const filename = btn.dataset.filename;
-        const fileId   = btn.dataset.fileId;
-
+    /* ── cooldown ────────────────────────────────── */
+    const cooldowns = {};
+    function startCooldown(key, btn, seconds = 60) {
+        cooldowns[key] = Date.now() + seconds * 1000;
+        tickCooldown(key, btn, seconds);
+    }
+    function tickCooldown(key, btn, seconds) {
+        const rem = Math.ceil((cooldowns[key] - Date.now()) / 1000);
+        if (rem <= 0) { btn.disabled = false; btn.textContent = 'Gửi lại OTP'; return; }
         btn.disabled = true;
-        const orig = btn.textContent;
-        btn.textContent = '...';
-
-        try {
-            const res  = await fetch('{{ route("app-updates.request-otp", [], false) }}', {
-                method: 'POST',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: new URLSearchParams({ filename }),
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok) {
-                toast(data.message || 'Đã gửi OTP qua Telegram', 'success');
-                const actEl = document.getElementById('actions-' + fileId);
-                if (actEl) { actEl.classList.remove('hidden'); actEl.classList.add('flex'); }
-                findOtpInput(fileId.replace(/^[md]-/, ''))?.focus();
-            } else {
-                toast(data.message || 'Không gửi được OTP', 'error');
-            }
-        } catch { toast('Lỗi kết nối', 'error'); }
-        finally { btn.disabled = false; btn.textContent = orig; }
+        btn.textContent = `Gửi lại (${rem}s)`;
+        setTimeout(() => tickCooldown(key, btn, seconds), 1000);
     }
 
-    /* ── upload OTP ─────────────────────────────── */
-    async function requestUploadOtp() {
-        if (!isOtpOn()) { toast('Upload không dùng OTP', 'warning'); return; }
-        const token = getToken();
-        if (!token) { toast('Nhập Security Code trước', 'warning'); return; }
+    /* ── upload modal ─────────────────────────────── */
+    function openUploadModal() {
+        $('uploadModal').classList.replace('hidden', 'flex');
+        showUploadStep(1);
+    }
+    function closeUploadModal() {
+        $('uploadModal').classList.replace('flex', 'hidden');
+        showUploadStep(1);
+        $('uploadOtp').value = '';
+        $('uploadOutput').classList.add('hidden');
+    }
+    function showUploadStep(step) {
+        $('uploadStep1').classList.toggle('hidden', step !== 1);
+        $('uploadStep2').classList.toggle('hidden', step !== 2);
+        const dots = [$('dot1'), $('dot2'), $('dot3')];
+        dots.forEach((d, i) => {
+            d.classList.toggle('bg-zinc-900', i < step);
+            d.classList.toggle('bg-zinc-200', i >= step);
+        });
+        const titles = ['', 'Upload file', 'Xác nhận OTP', 'Đang xử lý…'];
+        $('uploadModalTitle').textContent = titles[step] ?? 'Upload file';
+    }
+    function updateFileLabel(input) {
+        $('fileLabel').textContent = input.files[0]?.name ?? 'Chọn hoặc kéo thả file vào đây';
+    }
 
-        const btn = $('requestUploadOtpBtn');
-        btn.disabled = true;
+    /* Step 1 → gửi OTP */
+    async function uploadStep1() {
+        const token = getToken();
+        const file  = $('file').files[0];
+        if (!token) { toast('Nhập Security Code', 'warning'); return; }
+        if (!file)  { toast('Chọn file cần upload', 'warning'); return; }
+
+        const btn = $('uploadStep1Btn');
+        btn.disabled = true; btn.textContent = 'Đang gửi OTP…';
+
         try {
             const res  = await fetch(requestUploadOtpUrl, {
                 method: 'POST',
                 headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-TOKEN': csrfToken },
             });
             const data = await parseResponse(res);
-            if (res.ok) { toast(data.message || 'Đã gửi OTP upload qua Telegram', 'success'); $('uploadOtp').focus(); }
-            else { toast(data?.message || 'Không gửi được OTP', 'error'); }
+            if (res.ok) {
+                showUploadStep(2);
+                $('uploadOtp').focus();
+                startCooldown('upload', $('resendUploadOtpBtn'));
+            } else {
+                toast(data?.message || 'Không gửi được OTP', data?.message?.includes('phút') ? 'warning' : 'error');
+            }
         } catch { toast('Lỗi kết nối', 'error'); }
-        finally { btn.disabled = false; }
+        finally { btn.disabled = false; btn.textContent = 'Tiếp tục'; }
     }
 
-    /* ── upload ─────────────────────────────────── */
-    async function handleUpload(e) {
-        e.preventDefault();
-        const token = getToken();
-        const otp   = getUploadOtp();
-        const file  = $('file').files[0];
+    /* Step 2 → upload file */
+    async function uploadStep2() {
+        const otp  = getUploadOtp();
+        const file = $('file').files[0];
+        if (!otp)  { toast('Nhập OTP', 'warning'); $('uploadOtp').focus(); return; }
 
-        if (!token) { toast('Nhập Security Code', 'warning'); return; }
-        if (!file)  { toast('Chọn file cần upload', 'warning'); return; }
-        if (isOtpOn() && !otp) { toast('Nhập OTP upload', 'warning'); return; }
-
-        const btn = $('uploadBtn');
-        btn.disabled = true;
-        btn.textContent = 'Đang upload...';
+        const btn = $('uploadStep2Btn');
+        btn.disabled = true; btn.textContent = 'Đang upload…';
+        showUploadStep(3);
         $('uploadOutput').classList.add('hidden');
 
         const fd = new FormData();
@@ -396,71 +395,168 @@
         try {
             const res  = await fetch(uploadUrl, {
                 method: 'POST',
-                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-TOKEN': csrfToken },
+                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + getToken(), 'X-CSRF-TOKEN': csrfToken },
                 body: fd,
             });
             const data = await parseResponse(res);
             if (!res.ok) {
+                showUploadStep(2);
                 $('uploadOutput').classList.remove('hidden');
                 $('uploadOutput').textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
                 toast(data?.message || 'Upload thất bại', 'error');
             } else {
                 toast(data.message || 'Upload thành công!', 'success');
-                closeModal();
+                closeUploadModal();
                 setTimeout(() => window.location.reload(), 800);
             }
-        } catch { toast('Lỗi kết nối khi upload', 'error'); }
-        finally { btn.disabled = false; btn.textContent = 'Upload file'; }
+        } catch { showUploadStep(2); toast('Lỗi kết nối khi upload', 'error'); }
+        finally { btn.disabled = false; btn.textContent = 'Xác nhận & Upload'; }
     }
 
-    /* ── download ───────────────────────────────── */
-    function downloadFile(btn) {
-        const { hash, filename, requiresOtp } = btn.dataset;
-        const otp = requiresOtp === '1' ? (findOtpInput(hash)?.value?.trim() ?? '') : '';
+    /* Gửi lại OTP upload */
+    async function resendUploadOtp() {
+        const token = getToken();
+        if (!token) { toast('Nhập Security Code', 'warning'); return; }
+        const btn = $('resendUploadOtpBtn');
+        btn.disabled = true;
+        try {
+            const res  = await fetch(requestUploadOtpUrl, {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'Authorization': 'Bearer ' + token, 'X-CSRF-TOKEN': csrfToken },
+            });
+            const data = await parseResponse(res);
+            if (res.ok) { toast('Đã gửi lại OTP', 'success'); startCooldown('upload', btn); }
+            else { toast(data?.message || 'Không gửi được OTP', 'warning'); btn.disabled = false; }
+        } catch { toast('Lỗi kết nối', 'error'); btn.disabled = false; }
+    }
 
-        if (requiresOtp === '1' && !otp) {
-            toast('Nhập OTP trước khi tải file', 'warning');
-            findOtpInput(hash)?.focus();
+    /* ── OTP confirm modal (download / delete) ─────── */
+    let _otpAction = null; // { type:'download'|'delete', filename }
+
+    function openOtpModal(filename, actionLabel) {
+        $('otpModalLabel').textContent = actionLabel + ': ' + filename;
+        $('otpModalInput').value = '';
+        $('otpModal').classList.replace('hidden', 'flex');
+        $('otpModalInput').focus();
+    }
+    function closeOtpModal() {
+        $('otpModal').classList.replace('flex', 'hidden');
+        _otpAction = null;
+    }
+
+    async function autoSendDownloadOtp(filename) {
+        const res  = await fetch('{{ route("app-updates.request-otp", [], false) }}', {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: new URLSearchParams({ filename }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) { throw new Error(data?.message || 'Không gửi được OTP'); }
+        return data;
+    }
+
+    async function handleDownload(btn) {
+        const { filename, requiresOtp } = btn.dataset;
+        if (requiresOtp === '0') { submitDownloadForm(filename, ''); return; }
+
+        btn.disabled = true;
+        try {
+            await autoSendDownloadOtp(filename);
+            _otpAction = { type: 'download', filename };
+            openOtpModal(filename, 'Tải file');
+            startCooldown('dl:' + filename, $('resendDownloadOtpBtn'));
+        } catch (e) {
+            toast(e.message, e.message.includes('phút') ? 'warning' : 'error');
+        } finally { btn.disabled = false; }
+    }
+
+    async function handleDelete(btn) {
+        const { filename, requiresOtp } = btn.dataset;
+        if (!confirm(`Xóa file "${filename}"?`)) return;
+
+        if (requiresOtp === '0') {
+            await doDelete(filename, '');
             return;
         }
 
+        btn.disabled = true;
+        try {
+            await autoSendDownloadOtp(filename);
+            _otpAction = { type: 'delete', filename };
+            openOtpModal(filename, 'Xóa file');
+            startCooldown('dl:' + filename, $('resendDownloadOtpBtn'));
+        } catch (e) {
+            toast(e.message, e.message.includes('phút') ? 'warning' : 'error');
+        } finally { btn.disabled = false; }
+    }
+
+    async function confirmOtpAction() {
+        if (!_otpAction) return;
+        const otp = $('otpModalInput').value.trim();
+        if (!otp) { toast('Nhập OTP', 'warning'); $('otpModalInput').focus(); return; }
+
+        const btn = $('otpModalConfirmBtn');
+        btn.disabled = true; btn.textContent = 'Đang xử lý…';
+
+        try {
+            if (_otpAction.type === 'download') {
+                closeOtpModal();
+                submitDownloadForm(_otpAction.filename, otp);
+            } else {
+                await doDelete(_otpAction.filename, otp);
+                closeOtpModal();
+            }
+        } finally { btn.disabled = false; btn.textContent = 'Xác nhận'; }
+    }
+
+    async function resendDownloadOtp() {
+        if (!_otpAction) return;
+        const btn = $('resendDownloadOtpBtn');
+        btn.disabled = true;
+        try {
+            await autoSendDownloadOtp(_otpAction.filename);
+            toast('Đã gửi lại OTP', 'success');
+            startCooldown('dl:' + _otpAction.filename, btn);
+        } catch (e) {
+            toast(e.message, 'warning');
+            btn.disabled = false;
+        }
+    }
+
+    /* ── helpers ─────────────────────────────────── */
+    function submitDownloadForm(filename, otp) {
         const form = $('downloadForm');
         form.elements.filename.value = filename;
         form.elements.otp.value      = otp;
         form.submit();
     }
 
-    /* ── delete ─────────────────────────────────── */
-    async function deleteFile(btn) {
-        const { hash, filename } = btn.dataset;
-        const otp = findOtpInput(hash)?.value?.trim() ?? '';
-
-        if (!otp) { toast('Nhập OTP trước khi xóa', 'warning'); findOtpInput(hash)?.focus(); return; }
-        if (!confirm(`Xóa file "${filename}"?`)) return;
-
-        btn.disabled = true;
-        try {
-            const res  = await fetch(deleteWithOtpUrl, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-                body: new URLSearchParams({ filename, otp }),
-            });
-            const data = await parseResponse(res);
-            if (res.ok) { toast(data.message || 'Đã xóa file', 'success'); setTimeout(() => window.location.reload(), 800); }
-            else { toast(data?.message || 'Xóa thất bại', 'error'); btn.disabled = false; }
-        } catch { toast('Lỗi kết nối', 'error'); btn.disabled = false; }
+    async function doDelete(filename, otp) {
+        const res  = await fetch(deleteWithOtpUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: new URLSearchParams({ filename, otp }),
+        });
+        const data = await parseResponse(res);
+        if (res.ok) { toast(data.message || 'Đã xóa file', 'success'); setTimeout(() => window.location.reload(), 800); }
+        else { toast(data?.message || 'Xóa thất bại', 'error'); }
     }
 
-    /* ── listeners ──────────────────────────────── */
-    $('openUploadBtn').addEventListener('click', openModal);
-    $('closeUploadBtn').addEventListener('click', closeModal);
-    $('uploadModal').addEventListener('click', (e) => { if (e.target === $('uploadModal')) closeModal(); });
-    $('uploadForm').addEventListener('submit', handleUpload);
-    $('requestUploadOtpBtn').addEventListener('click', requestUploadOtp);
-    $('otpProtected').addEventListener('change', syncOtpSection);
-
-    document.addEventListener('DOMContentLoaded', () => syncOtpSection());
+    /* ── listeners ───────────────────────────────── */
+    $('openUploadBtn').addEventListener('click', openUploadModal);
+    $('closeUploadBtn').addEventListener('click', closeUploadModal);
+    $('uploadModal').addEventListener('click', (e) => { if (e.target === $('uploadModal')) closeUploadModal(); });
+    $('uploadStep1Btn').addEventListener('click', uploadStep1);
+    $('uploadStep2Btn').addEventListener('click', uploadStep2);
+    $('uploadBackBtn').addEventListener('click', () => showUploadStep(1));
+    $('resendUploadOtpBtn').addEventListener('click', resendUploadOtp);
+    $('otpModalConfirmBtn').addEventListener('click', confirmOtpAction);
+    $('otpModalCancelBtn').addEventListener('click', closeOtpModal);
+    $('otpModal').addEventListener('click', (e) => { if (e.target === $('otpModal')) closeOtpModal(); });
+    $('resendDownloadOtpBtn').addEventListener('click', resendDownloadOtp);
+    $('otpModalInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmOtpAction(); });
+    $('uploadOtp').addEventListener('keydown', (e) => { if (e.key === 'Enter') uploadStep2(); });
 </script>
 </body>
 </html>

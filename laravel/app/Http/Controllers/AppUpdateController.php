@@ -96,8 +96,14 @@ class AppUpdateController extends Controller
 
     public function fileRequestUploadOtp(Request $request): JsonResponse
     {
+        $cooldownKey = 'cd_upload:' . sha1($request->ip());
+        if (Cache::has($cooldownKey)) {
+            return response()->json(['message' => 'Vui lòng đợi 1 phút trước khi gửi lại OTP.'], 429);
+        }
+
         $otp = (string) random_int(100000, 999999);
         Cache::put($this->fileUploadOtpKey($request->ip()), ['otp' => $otp], now()->addMinutes(5));
+        Cache::put($cooldownKey, true, now()->addSeconds(60));
         TelegramNotification::send("OTP upload file: {$otp}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
 
         return response()->json(['message' => 'Đã gửi OTP upload qua Telegram. Mã có hiệu lực 5 phút.']);
@@ -113,8 +119,14 @@ class AppUpdateController extends Controller
             return response()->json(['message' => 'File này không yêu cầu OTP.']);
         }
 
+        $cooldownKey = 'cd_download:' . sha1($request->ip() . '|' . $filename);
+        if (Cache::has($cooldownKey)) {
+            return response()->json(['message' => 'Vui lòng đợi 1 phút trước khi gửi lại OTP.'], 429);
+        }
+
         $otp = (string) random_int(100000, 999999);
         Cache::put($this->fileDownloadOtpKey($request->ip(), $filename), ['otp' => $otp], now()->addMinutes(5));
+        Cache::put($cooldownKey, true, now()->addSeconds(60));
         TelegramNotification::send("OTP tải file: {$otp}\nFile: {$filename}\nIP: " . $request->ip() . "\nHiệu lực: 5 phút");
 
         return response()->json(['message' => 'Đã gửi OTP qua Telegram. Mã có hiệu lực 5 phút.']);
