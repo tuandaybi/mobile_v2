@@ -112,8 +112,10 @@ class AppUpdateController extends Controller
         $filename = basename($request->validate(['filename' => ['required', 'string', 'max:255']])['filename']);
         abort_unless(Storage::disk('public')->exists(self::FILES_DIR . '/' . $filename), 404, 'Không tìm thấy file.');
 
-        $meta = $this->fileMeta($filename);
-        if (!($meta['otp_protected'] ?? true)) {
+        $meta      = $this->fileMeta($filename);
+        $forDelete = $request->boolean('for_delete');
+
+        if (!$forDelete && !($meta['otp_protected'] ?? true)) {
             return response()->json(['message' => 'File này không yêu cầu OTP.']);
         }
 
@@ -164,15 +166,12 @@ class AppUpdateController extends Controller
         $path     = self::FILES_DIR . '/' . $filename;
         abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file.');
 
-        $meta = $this->fileMeta($filename);
-        if ($meta['otp_protected'] ?? true) {
-            $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
-            $cached = Cache::get($key);
-            if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
-                return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
-            }
-            Cache::forget($key);
+        $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
+        $cached = Cache::get($key);
+        if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+            return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
         }
+        Cache::forget($key);
 
         Storage::disk('public')->delete($path);
         Storage::disk('public')->delete(self::META_DIR . '/' . $filename . '.json');

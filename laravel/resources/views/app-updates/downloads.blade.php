@@ -444,11 +444,13 @@
         _otpAction = null;
     }
 
-    async function autoSendDownloadOtp(filename) {
+    async function autoSendDownloadOtp(filename, forDelete = false) {
+        const body = new URLSearchParams({ filename });
+        if (forDelete) body.append('for_delete', '1');
         const res  = await fetch('{{ route("app-updates.request-otp", [], false) }}', {
             method: 'POST',
             headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json', 'X-CSRF-TOKEN': csrfToken },
-            body: new URLSearchParams({ filename }),
+            body,
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) { throw new Error(data?.message || 'Không gửi được OTP'); }
@@ -471,17 +473,12 @@
     }
 
     async function handleDelete(btn) {
-        const { filename, requiresOtp } = btn.dataset;
+        const { filename } = btn.dataset;
         if (!confirm(`Xóa file "${filename}"?`)) return;
-
-        if (requiresOtp === '0') {
-            await doDelete(filename, '');
-            return;
-        }
 
         btn.disabled = true;
         try {
-            await autoSendDownloadOtp(filename);
+            await autoSendDownloadOtp(filename, true);
             _otpAction = { type: 'delete', filename };
             openOtpModal(filename, 'Xóa file');
             startCooldown('dl:' + filename, $('resendDownloadOtpBtn'));
