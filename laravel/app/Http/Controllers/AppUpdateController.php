@@ -209,10 +209,8 @@ class AppUpdateController extends Controller
             Cache::forget($otpKey);
         }
 
-        $file = $request->file('file');
-        $slugVersion = Str::slug($validated['version']);
-        $ext = strtolower($file->getClientOriginalExtension() ?: 'bin');
-        $filename = "{$appSlug}-{$channel}-{$slugVersion}-" . now()->format('YmdHis') . '.' . $ext;
+                $file = $request->file('file');
+        $filename = $file->getClientOriginalName() ?: ('upload-' . now()->format('YmdHis'));
         $path = $file->storeAs($this->releasesDir($appSlug, $channel), $filename, 'public');
 
         $fullPath = Storage::disk('public')->path($path);

@@ -14,11 +14,11 @@
         $selectedFilename = request('filename');
     @endphp
 
-    <div class="max-w-7xl mx-auto px-4 py-8 space-y-8">
+    <div class="max-w-6xl mx-auto px-4 py-8 space-y-8">
         <div class="flex items-center justify-between gap-4">
             <div>
                 <h1 class="text-3xl font-bold">File Server</h1>
-                <p class="text-sm text-slate-500 mt-2">Upload, tải file và xóa file đều dùng OTP Telegram.</p>
+                <p class="text-sm text-slate-500 mt-2">Trang upload và download file đơn giản.</p>
             </div>
             <button id="openUploadModalBtn" type="button" class="rounded-xl bg-slate-900 px-5 py-3 text-sm font-semibold text-white hover:bg-black transition">
                 Upload file
@@ -38,7 +38,6 @@
         <section id="downloads" class="rounded-2xl bg-white border border-slate-200 shadow-sm overflow-hidden">
             <div class="border-b border-slate-200 px-6 py-4">
                 <h2 class="text-xl font-semibold">Danh sách file</h2>
-                <p class="text-sm text-slate-500 mt-1">OTP tải file cũng là OTP xóa file. Mỗi mã chỉ dùng 1 lần.</p>
             </div>
 
             <div class="overflow-x-auto">
@@ -46,10 +45,8 @@
                     <thead class="bg-slate-50">
                         <tr>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">File</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ứng dụng</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Phiên bản</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Dung lượng</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ngày phát hành</th>
+                            <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">Ngày upload</th>
                             <th class="px-6 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">OTP</th>
                             <th class="px-6 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">Thao tác</th>
                         </tr>
@@ -64,41 +61,32 @@
                             <tr id="file-{{ md5(($file['app_slug'] ?? '') . '|' . ($file['channel'] ?? '') . '|' . ($file['filename'] ?? '')) }}" data-selected="{{ $isSelected ? '1' : '0' }}" class="{{ $isSelected ? 'bg-blue-50' : '' }}">
                                 <td class="px-6 py-4 align-top">
                                     <div class="font-semibold text-slate-900 break-all">{{ $file['filename'] }}</div>
-                                    @if (!empty($file['notes']))
-                                        <div class="mt-1 text-sm text-slate-500 whitespace-pre-line">{{ $file['notes'] }}</div>
-                                    @endif
                                 </td>
-                                <td class="px-6 py-4 align-top text-sm text-slate-700">{{ $file['app_slug'] }} / {{ $file['channel'] }}</td>
-                                <td class="px-6 py-4 align-top text-sm text-slate-700">v{{ $file['version'] }}</td>
-                                <td class="px-6 py-4 align-top text-sm text-slate-700">{{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB</td>
-                                <td class="px-6 py-4 align-top text-sm text-slate-700">{{ $file['published_at'] ?? '-' }}</td>
+                                <td class="px-6 py-4 align-top text-sm text-slate-700 whitespace-nowrap">{{ number_format(($file['size'] ?? 0) / 1048576, 2) }} MB</td>
+                                <td class="px-6 py-4 align-top text-sm text-slate-700 whitespace-nowrap">{{ !empty($file['published_at']) ? \Illuminate\Support\Carbon::parse($file['published_at'])->format('d/m/Y H:i') : '-' }}</td>
                                 <td class="px-6 py-4 align-top">
-                                    @if ($file['otp_protected'] ?? true)
-                                        <div class="space-y-2 min-w-[220px]">
-                                            <form method="POST" action="{{ route('app-updates.request-otp', [], false) }}">
-                                                @csrf
-                                                <input type="hidden" name="app_slug" value="{{ $file['app_slug'] }}">
-                                                <input type="hidden" name="channel" value="{{ $file['channel'] }}">
-                                                <input type="hidden" name="filename" value="{{ $file['filename'] }}">
-                                                <button type="button" class="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition" onclick="requestOtp(this.form)">
-                                                    Lấy OTP
-                                                </button>
-                                            </form>
-                                            <input
-                                                type="text"
-                                                inputmode="numeric"
-                                                maxlength="6"
-                                                placeholder="Nhập OTP 6 số"
-                                                class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
-                                                data-otp-input="{{ $isSelected ? '1' : '0' }}"
-                                                data-app-slug="{{ $file['app_slug'] }}"
-                                                data-channel="{{ $file['channel'] }}"
-                                                data-filename="{{ $file['filename'] }}"
-                                            >
-                                        </div>
-                                    @else
-                                        <span class="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Không cần OTP</span>
-                                    @endif
+                                    <div class="space-y-2 min-w-[220px]">
+                                        <form method="POST" action="{{ route('app-updates.request-otp', [], false) }}">
+                                            @csrf
+                                            <input type="hidden" name="app_slug" value="{{ $file['app_slug'] }}">
+                                            <input type="hidden" name="channel" value="{{ $file['channel'] }}">
+                                            <input type="hidden" name="filename" value="{{ $file['filename'] }}">
+                                            <button type="button" class="w-full rounded-lg bg-amber-500 px-3 py-2 text-sm font-semibold text-white hover:bg-amber-600 transition" onclick="requestOtp(this.form)">
+                                                Lấy OTP
+                                            </button>
+                                        </form>
+                                        <input
+                                            type="text"
+                                            inputmode="numeric"
+                                            maxlength="6"
+                                            placeholder="Nhập OTP 6 số"
+                                            class="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm outline-none focus:border-blue-500"
+                                            data-otp-input="{{ $isSelected ? '1' : '0' }}"
+                                            data-app-slug="{{ $file['app_slug'] }}"
+                                            data-channel="{{ $file['channel'] }}"
+                                            data-filename="{{ $file['filename'] }}"
+                                        >
+                                    </div>
                                 </td>
                                 <td class="px-6 py-4 align-top">
                                     <div class="flex justify-end gap-2">
@@ -127,7 +115,7 @@
                             </tr>
                         @empty
                             <tr>
-                                <td colspan="7" class="px-6 py-10 text-center text-slate-500">Chưa có file nào.</td>
+                                <td colspan="5" class="px-6 py-10 text-center text-slate-500">Chưa có file nào.</td>
                             </tr>
                         @endforelse
                     </tbody>
@@ -137,7 +125,7 @@
     </div>
 
     <div id="uploadModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/40 p-4">
-        <div class="w-full max-w-2xl rounded-2xl bg-white shadow-2xl">
+        <div class="w-full max-w-xl rounded-2xl bg-white shadow-2xl">
             <div class="flex items-center justify-between border-b border-slate-200 px-6 py-4">
                 <div>
                     <h2 class="text-xl font-semibold">Upload file</h2>
@@ -157,14 +145,7 @@
                         <input id="file" type="file" required class="w-full rounded-xl border border-slate-300 px-4 py-3">
                     </div>
 
-                    <div class="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-                        <label class="inline-flex items-center gap-3 text-sm font-medium text-slate-700">
-                            <input id="otpProtected" type="checkbox" checked class="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500">
-                            Bảo vệ bằng OTP
-                        </label>
-                    </div>
-
-                    <div id="uploadOtpSection" class="grid gap-4 md:grid-cols-[1fr_auto] items-end">
+                    <div class="grid gap-4 md:grid-cols-[1fr_auto] items-end">
                         <div>
                             <label class="mb-2 block text-sm font-medium text-slate-700">OTP upload</label>
                             <input id="uploadOtp" type="text" inputmode="numeric" maxlength="6" placeholder="Nhập OTP upload" class="w-full rounded-xl border border-slate-300 px-4 py-3 outline-none focus:border-blue-500">
@@ -201,14 +182,11 @@
         const defaultAppSlug = 'tiktok-bot';
         const defaultChannel = 'app';
         const defaultVersion = '1.0.0';
-        const defaultMandatory = '1';
-        const defaultNotes = 'Phiên bản được tải lên từ bảng điều khiển cập nhật.';
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
 
         const getEl = (id) => document.getElementById(id);
         const getToken = () => getEl('token').value.trim();
         const getUploadOtp = () => getEl('uploadOtp').value.trim();
-        const isOtpProtected = () => getEl('otpProtected').checked;
 
         function showOutput(el, payload) {
             if (!el) return;
@@ -230,12 +208,6 @@
         function closeUploadModal() {
             getEl('uploadModal').classList.add('hidden');
             getEl('uploadModal').classList.remove('flex');
-        }
-
-        function syncUploadOtpVisibility() {
-            const section = getEl('uploadOtpSection');
-            if (!section) return;
-            section.classList.toggle('hidden', !isOtpProtected());
         }
 
         function findOtpInput(appSlug, channel, filename) {
@@ -269,11 +241,6 @@
         }
 
         async function requestUploadOtp() {
-            if (!isOtpProtected()) {
-                alert('Đã tắt bảo vệ OTP cho file này');
-                return;
-            }
-
             const token = getToken();
             if (!token) {
                 alert('Nhập Security Code trước khi gửi OTP upload');
@@ -324,7 +291,7 @@
                 return;
             }
 
-            if (isOtpProtected() && !getUploadOtp()) {
+            if (!getUploadOtp()) {
                 alert('Nhập OTP upload trước khi upload');
                 getEl('uploadBtn').disabled = false;
                 return;
@@ -341,9 +308,7 @@
             formData.append('app_slug', defaultAppSlug);
             formData.append('channel', defaultChannel);
             formData.append('version', defaultVersion);
-            formData.append('notes', defaultNotes);
-            formData.append('mandatory', defaultMandatory);
-            formData.append('otp_protected', isOtpProtected() ? '1' : '0');
+            formData.append('otp_protected', '1');
             formData.append('otp', getUploadOtp());
             formData.append('file', file);
 
@@ -366,7 +331,7 @@
                 }
 
                 alert(payload.message || 'Upload thành công');
-                window.location.href = payload.download_url || window.location.href;
+                window.location.reload();
             } catch (error) {
                 showOutput(getEl('uploadOutput'), String(error));
                 alert('Không gửi được yêu cầu upload (network error)');
@@ -382,9 +347,9 @@
             const otpInput = findOtpInput(appSlug, channel, filename);
             const otp = otpInput?.value?.trim() || '';
 
-            if (otpInput && !otp) {
+            if (!otp) {
                 alert('Nhập OTP trước khi tải file');
-                otpInput.focus();
+                otpInput?.focus();
                 return;
             }
 
@@ -403,9 +368,9 @@
             const otpInput = findOtpInput(appSlug, channel, filename);
             const otp = otpInput?.value?.trim() || '';
 
-            if (otpInput && !otp) {
+            if (!otp) {
                 alert('Nhập OTP trước khi xóa file');
-                otpInput.focus();
+                otpInput?.focus();
                 return;
             }
 
@@ -444,11 +409,8 @@
         document.getElementById('requestUploadOtpBtn').addEventListener('click', requestUploadOtp);
         document.getElementById('openUploadModalBtn').addEventListener('click', openUploadModal);
         document.getElementById('closeUploadModalBtn').addEventListener('click', closeUploadModal);
-        document.getElementById('otpProtected').addEventListener('change', syncUploadOtpVisibility);
 
         document.addEventListener('DOMContentLoaded', () => {
-            syncUploadOtpVisibility();
-
             const selectedRow = document.querySelector('[data-selected="1"]');
             const selectedOtpInput = document.querySelector('[data-otp-input="1"]');
 
