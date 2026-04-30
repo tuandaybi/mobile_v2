@@ -186,7 +186,7 @@
         <div id="uploadStep1" class="p-5 space-y-4">
             <div>
                 <label class="block text-xs font-semibold text-zinc-500 uppercase tracking-wide mb-1.5">Security Code</label>
-                <input id="token" type="password" autocomplete="off" placeholder="Bearer token"
+                <input id="token" type="password" autocomplete="off" placeholder="Security Code..."
                     class="w-full rounded-xl border border-zinc-300 px-3.5 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition">
             </div>
             <div>
@@ -202,7 +202,7 @@
             <div class="flex items-center justify-between rounded-xl bg-zinc-50 border border-zinc-200 px-4 py-3">
                 <div>
                     <span class="text-sm font-medium text-zinc-700">Download cần OTP</span>
-                    <p class="text-xs text-zinc-500 mt-0.5">Người tải phải nhập OTP qua Telegram</p>
+                    <p class="text-xs text-zinc-500 mt-0.5">Nếu bật, người tải phải nhập OTP</p>
                 </div>
                 <label class="relative inline-flex items-center cursor-pointer">
                     <input id="otpProtected" type="checkbox" checked class="sr-only peer">
