@@ -164,12 +164,15 @@ class AppUpdateController extends Controller
         $path     = self::FILES_DIR . '/' . $filename;
         abort_unless(Storage::disk('public')->exists($path), 404, 'Không tìm thấy file.');
 
-        $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
-        $cached = Cache::get($key);
-        if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
-            return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
+        $meta = $this->fileMeta($filename);
+        if ($meta['otp_protected'] ?? true) {
+            $key    = $this->fileDownloadOtpKey($request->ip(), $filename);
+            $cached = Cache::get($key);
+            if (!is_array($cached) || ($cached['otp'] ?? '') !== ($validated['otp'] ?? '')) {
+                return response()->json(['message' => 'OTP không đúng hoặc đã hết hạn.'], 422);
+            }
+            Cache::forget($key);
         }
-        Cache::forget($key);
 
         Storage::disk('public')->delete($path);
         Storage::disk('public')->delete(self::META_DIR . '/' . $filename . '.json');
