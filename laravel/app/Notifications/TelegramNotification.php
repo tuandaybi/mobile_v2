@@ -53,18 +53,16 @@ class TelegramNotification extends Notification
 
     private static function botToken(): ?string
     {
-        return Setting::get('telegram_bot_token') ?? env('TELEGRAM_BOT_TOKEN');
+        return Setting::get('telegram_bot_token');
     }
 
     private static function chatId(): ?string
     {
-        return Setting::get('telegram_chat_id') ?? env('TELEGRAM_CHAT_ID');
+        return Setting::get('telegram_chat_id');
     }
 
     private static function isEnabled(): bool
     {
-        $val = Setting::get('telegram_enabled');
-        if ($val !== null) return $val === '1';
-        return !empty(env('TELEGRAM_BOT_TOKEN'));
+        return Setting::get('telegram_enabled') === '1';
     }
 }
