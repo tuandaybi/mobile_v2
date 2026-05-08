@@ -3,7 +3,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
     MobileInController, MobileOutController, PurchaseInvoiceController, 
     ServiceController, AuthController, DebtController, HomeController,
-    ReportController, InboxController, ZaloWebhookController, AppUpdateController
+    ReportController, InboxController, AppUpdateController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -77,7 +77,7 @@ Route::middleware(['auth:sanctum', 'token.expiry'])->group(function () {
     //Report
     Route::get('/reports/profit-daily', [ReportController::class, 'profitDaily'])->middleware('permission:baocaoloinhuan.xem');
     Route::get('/reports/sales-models', [ReportController::class, 'salesModels'])->middleware('permission:baocaosanluong.xem');
-    Route::get('/reports/debt-summary', [ReportController::class, 'debtSummary'])->middleware('permission:baocaosanluong.xem');
+    Route::get('/reports/debt-summary', [ReportController::class, 'debtSummary'])->middleware('permission:congno.xem');
 
     //Notifications
     Route::get('/inbox', [InboxController::class, 'index'])->middleware('permission:admin.thongbao');

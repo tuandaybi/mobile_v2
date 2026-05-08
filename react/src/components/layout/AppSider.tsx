@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Layout, Menu } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { MenuProps } from 'antd';
@@ -31,9 +31,47 @@ interface AppSiderProps {
   onCollapse: (collapsed: boolean) => void;
 }
 
+const MENU_PERMISSIONS: Record<string, string> = {
+  '/home': 'trangchinh',
+  '/mobiles': 'dienthoai.xemmua',
+  '/services': 'dichvu.xem',
+  '/debts': 'congno.xem',
+  '/sold-products': 'dienthoai.xemban',
+  '/check-imei': 'checkimei.xem',
+  '/report-profit': 'baocaoloinhuan.xem',
+  '/report-quantity': 'baocaosanluong.xem',
+  '/report-debt': 'congno.xem',
+  '/admin/users': 'admin.users',
+  '/admin/stores': 'admin.cuahang',
+  '/admin/customers': 'admin.khachhang',
+  '/admin/devices': 'admin.sanpham',
+  '/admin/colors': 'admin.mausanpham',
+  '/admin/notifications': 'admin.thongbao',
+  '/admin/backups': 'admin.saoluu',
+};
+
+function getUserPermissions(): string[] {
+  try {
+    const user = localStorage.getItem('user');
+    if (!user) return [];
+    const parsed = JSON.parse(user);
+    return Array.isArray(parsed.permissions) ? parsed.permissions : [];
+  } catch {
+    return [];
+  }
+}
+
 const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
+
+  const permissions = useMemo(() => getUserPermissions(), []);
+
+  const hasPermission = (key: string) => {
+    const required = MENU_PERMISSIONS[key];
+    if (!required) return true;
+    return permissions.includes(required);
+  };
 
   const onMenuClick = async ({ key }: { key: string }) => {
     if (key === 'logout') {
@@ -45,7 +83,17 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
     }
   };
 
-  const menuItems: MenuProps['items'] = [
+  const filterItems = (items: any[]): any[] =>
+    items.map((item) => {
+      if (item.children) {
+        const filtered = filterItems(item.children);
+        return filtered.length > 0 ? { ...item, children: filtered } : null;
+      }
+      if (item.key === 'logout') return item;
+      return hasPermission(item.key) ? item : null;
+    }).filter(Boolean);
+
+  const allMenuItems: MenuProps['items'] = [
     {
       type: 'group',
       label: 'DANH MỤC',
@@ -84,11 +132,13 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
     },
   ];
 
+  const menuItems = useMemo(() => filterItems(allMenuItems as any[]), [permissions]);
+
   return (
-    <Sider 
-        collapsible 
-        collapsed={collapsed} 
-        onCollapse={onCollapse} 
+    <Sider
+        collapsible
+        collapsed={collapsed}
+        onCollapse={onCollapse}
         breakpoint="lg"
         collapsedWidth={0}
         onBreakpoint={(broken) => onCollapse(broken)}

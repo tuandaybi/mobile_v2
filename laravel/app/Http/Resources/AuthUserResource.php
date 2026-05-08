@@ -32,8 +32,8 @@ class AuthUserResource extends JsonResource
             'roles'              => method_exists($this->resource, 'getRoleNames')
                 ? $this->resource->getRoleNames()
                 : [],
-            'permiss'            => method_exists($this->resource, 'getPermissionNames')
-                ? $this->resource->getPermissionNames()
+            'permissions'        => method_exists($this->resource, 'getAllPermissions')
+                ? $this->resource->getAllPermissions()->pluck('name')->values()
                 : [],
             // ➜ luôn có field, kể cả null (đỡ undefined ở FE)
             'auth_token'         => $this->authToken,
