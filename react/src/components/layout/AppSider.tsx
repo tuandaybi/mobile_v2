@@ -22,6 +22,7 @@ import {
   TeamOutlined,
   AccountBookOutlined,
   NotificationOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -48,6 +49,7 @@ const MENU_PERMISSIONS: Record<string, string> = {
   '/admin/colors': 'admin.mausanpham',
   '/admin/notifications': 'admin.thongbao',
   '/admin/backups': 'admin.saoluu',
+  '/admin/settings': 'admin.saoluu',
 };
 
 function getUserPermissions(): string[] {
@@ -127,6 +129,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
         { key: '/admin/colors', icon: <BgColorsOutlined />, label: 'Quản lý màu sản phẩm' },
         { key: '/admin/notifications', icon: <NotificationOutlined />, label: 'Quản lý thông báo' },
         { key: '/admin/backups', icon: <DatabaseOutlined />, label: 'Quản lý sao lưu' },
+        { key: '/admin/settings', icon: <SettingOutlined />, label: 'Cài đặt hệ thống' },
         { key: 'logout', icon: <LogoutOutlined />, label: 'Đăng xuất' },
       ],
     },

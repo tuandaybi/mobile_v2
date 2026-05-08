@@ -24,6 +24,7 @@ const AdminColors = lazy(() => import('@/pages/admin/colors'));
 const AdminStores = lazy(() => import('@/pages/admin/stores'));
 const AdminNotifications = lazy(() => import('@/pages/admin/notifi'));
 const AdminBackups = lazy(() => import('@/pages/admin/backups'));
+const AdminSettings = lazy(() => import('@/pages/admin/settings'));
 
 const Router: React.FC = () => {
   return (
@@ -50,6 +51,7 @@ const Router: React.FC = () => {
           <Route path="/admin/colors" element={<ProtectedRoute><AdminColors /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
           <Route path="/admin/backups" element={<ProtectedRoute><AdminBackups /></ProtectedRoute>} />
+          <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
           <Route path="*" element={<LoginPage />} />
         </Routes>
       </Suspense>

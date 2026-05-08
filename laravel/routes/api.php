@@ -8,7 +8,7 @@ use App\Http\Controllers\{
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
     DeviceStorageController, ColorController, StoreController, 
-    SupplierController, UserController, UserTokenController
+    SupplierController, UserController, UserTokenController, SettingController
 };
 
 Route::get('/ping', fn() => response()->json(['ok' => true]));
@@ -125,6 +125,10 @@ Route::middleware(['auth:sanctum', 'token.expiry'])
 
         // Suppliers
         //Route::apiResource('suppliers', SupplierController::class)->except(['create','edit']);
+
+        //Admin -> Settings
+        Route::get('settings/telegram', [SettingController::class, 'telegramShow'])->middleware('permission:admin.saoluu');
+        Route::put('settings/telegram', [SettingController::class, 'telegramUpdate'])->middleware('permission:admin.saoluu');
 
     });
 
