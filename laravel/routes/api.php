@@ -18,7 +18,7 @@ Route::post('/redeem', [AuthController::class, 'redeem'])->middleware('throttle:
 Route::post('/license/verify', [AuthController::class, 'verify'])->middleware('throttle:30,1');
 Route::post('/register', [AuthController::class, 'store']);
 Route::get('/home', [HomeController::class, 'index'])
-    ->middleware(['auth:sanctum', 'permission:trangchinh']);
+    ->middleware(['auth:sanctum', 'token.expiry', 'permission:trangchinh']);
 
 Route::get('admin/app-updates', [AppUpdateController::class, 'index'])->name('app-updates.index');
 Route::get('admin/app-updates/trash', [AppUpdateController::class, 'trash'])->name('app-updates.trash');
@@ -36,7 +36,7 @@ Route::prefix('admin')
         Route::delete('app-updates/{appSlug}/{channel}', [AppUpdateController::class, 'destroy'])->name('app-updates.destroy');
     });
 
-Route::middleware('auth:sanctum')->group(function () {
+Route::middleware(['auth:sanctum', 'token.expiry'])->group(function () {
     // Profile
     Route::get('/user', [AuthController::class, 'index']);
     Route::patch('/user', [AuthController::class, 'update']);
@@ -92,7 +92,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
 });
 
-Route::middleware(['auth:sanctum'])
+Route::middleware(['auth:sanctum', 'token.expiry'])
     ->prefix('admin')->name('admin.')
     ->group(function () {
         //Admin -> Users
@@ -129,7 +129,7 @@ Route::middleware(['auth:sanctum'])
     });
 
 // routes/web.php (khu admin, đã có auth + can)
-Route::prefix('admin/users')->middleware(['auth:sanctum'])->group(function () {
+Route::prefix('admin/users')->middleware(['auth:sanctum', 'token.expiry'])->group(function () {
     Route::get('{id}/tokens', [UserTokenController::class, 'index'])->middleware('permission:admin.users');
     Route::post('{id}/tokens', [UserTokenController::class, 'store'])->middleware('permission:admin.users');
     Route::delete('{id}/tokens/{tokenId}', [UserTokenController::class, 'destroy'])->middleware('permission:admin.users');

@@ -2,6 +2,7 @@ import React from 'react';
 import { Layout, Menu } from 'antd';
 import { useNavigate, useLocation } from 'react-router-dom';
 import type { MenuProps } from 'antd';
+import api from '@/../axiosConfig';
 import {
   DashboardOutlined,
   MobileOutlined,
@@ -34,10 +35,11 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  const onMenuClick = ({ key }: { key: string }) => {
+  const onMenuClick = async ({ key }: { key: string }) => {
     if (key === 'logout') {
+      try { await api.post('/logout'); } catch {}
       localStorage.clear();
-      navigate('login')
+      navigate('/login');
     } else {
       navigate(key);
     }

@@ -34,11 +34,15 @@ const LoginForm: React.FC = () => {
     }
   };
 
-  // Check token khi load trang
   useEffect(() => {
     const token = localStorage.getItem('auth_token');
     if (token) {
-      navigate('/home'); // không gọi API
+      api.get('/user').then(() => {
+        navigate('/home');
+      }).catch(() => {
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+      });
     }
   }, []);
 

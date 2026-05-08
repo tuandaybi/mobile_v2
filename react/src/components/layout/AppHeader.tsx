@@ -50,9 +50,10 @@ const AppHeader: React.FC<AppHeaderProps> = ({}) => {
     }
   }, []);
 
-  const logout = () => {
+  const logout = async () => {
+    try { await api.post('/logout'); } catch {}
     localStorage.clear();
-    navigate('login');
+    navigate('/login');
   };
 
   const profileMenuItems = [

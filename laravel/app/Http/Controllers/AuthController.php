@@ -177,6 +177,12 @@ class AuthController extends Controller
         ]);
     }
 
+    public function logout(Request $request)
+    {
+        $request->user()->currentAccessToken()->delete();
+        return response()->json(['message' => 'Đăng xuất thành công']);
+    }
+
     // Redeem: lưu token_key + sync license_expires_at để FE đọc
     public function redeem(Request $req)
     {

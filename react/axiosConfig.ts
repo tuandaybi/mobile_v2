@@ -25,10 +25,9 @@ api.interceptors.response.use(
   (error) => {
     if (error.response) {
       const status = error.response.status;
-      const message = error.response.data?.message || '';
-      // Chỉ logout nếu token hết hạn hoặc chưa xác thực, không phải lỗi đăng nhập/đăng ký
+      const msg = error.response.data?.message || '';
       if (status === 401) {
-        if (message === 'Token không tồn tại' || message === 'Token không hợp lệ' || message === 'Token đã hết hạn') {
+        if (msg === 'Token không tồn tại' || msg === 'Token không hợp lệ' || msg === 'Token đã hết hạn') {
           localStorage.removeItem('auth_token');
           localStorage.removeItem('user');
           window.location.href = '/login';
