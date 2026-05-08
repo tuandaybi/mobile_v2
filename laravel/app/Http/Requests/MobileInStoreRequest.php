@@ -13,7 +13,7 @@ class MobileInStoreRequest extends FormRequest
             'device_id'        => ['required','integer','exists:devices,id'],
             'color_id'         => ['required','integer','exists:colors,id'],
             'storage_id'       => ['required','integer','exists:storages,id'],
-            'imei'             => ['required', 'string', 'min:5', 'max:30', 'regex:/^[A-Za-z0-9]+$/'],
+            'imei'             => ['required', 'string', 'min:4', 'max:30', 'regex:/^[A-Za-z0-9]+$/'],
             'battery_capacity' => ['nullable','integer','between:0,100'],
             'country_code'     => ['nullable','string','max:10'],
             'supplier'         => ['nullable','string','max:191'],

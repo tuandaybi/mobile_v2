@@ -159,7 +159,7 @@ export default function MobileModal() {
           <Select placeholder="Chọn thiết bị" options={optionsDevice} loading={optionsLoading} allowClear showSearch optionFilterProp="label" />
         </Form.Item>
 
-        <Form.Item label="IMEI" name="imei" rules={[{ required: true, message: 'Vui lòng nhập IMEI' }]}>
+        <Form.Item label="Imei hoặc Seri" name="imei" rules={[{ required: true, message: 'Vui lòng nhập Imei hoặc Seri' }, { min: 4, message: 'Tối thiểu 4 ký tự' }]}>
           <Input placeholder="VD: 352852115258376" />
         </Form.Item>
 
