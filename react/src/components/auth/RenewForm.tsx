@@ -11,7 +11,7 @@ const RenewForm: React.FC = () => {
     try {
       const res = await api.post('redeem', {
         code: values.token_key,
-      });
+      }, { suppressToast: true });
       message.success(res.data.message);
     } catch (err: any) {
       if (err.response) {

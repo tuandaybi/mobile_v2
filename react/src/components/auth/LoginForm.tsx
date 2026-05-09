@@ -14,7 +14,7 @@ const LoginForm: React.FC = () => {
         email: values.email,
         password: values.password,
         remember: values.remember,
-      });
+      }, { suppressToast: true });
       localStorage.setItem('auth_token', res.data.user.auth_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
 

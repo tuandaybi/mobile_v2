@@ -12,7 +12,7 @@ const RegisterForm: React.FC = () => {
     const { name, email, password, password_confirmation } = values;
     setLoading(true);
     try {
-      const res = await api.post('register', { name, email, password, password_confirmation });
+      const res = await api.post('register', { name, email, password, password_confirmation }, { suppressToast: true });
       message.success('Tạo tài khoản thành công!');
       console.log('Thông tin tài khoản:', res.data);
       form.resetFields();
