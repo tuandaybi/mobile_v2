@@ -253,6 +253,7 @@ const handleSelectName = (val: string, option: any) => {
       open={!!modal.isOpen}
       onCancel={modal.close}
       footer={null}
+      maskClosable={false}
       destroyOnHidden
     >
       <Form<FormValues>

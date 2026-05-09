@@ -143,8 +143,8 @@ export default function MobileModal() {
       open={isOpen}
       onCancel={close}
       footer={null}
-      destroyOnHidden  // dùng theo cảnh báo antd
-      // KHÔNG forceRender để Modal unmount khi đóng
+      maskClosable={false}
+      destroyOnHidden
     >
       {/* 👇 key này ép remount form mỗi lần mở/switch bản ghi */}
       <Form<FormValues>
