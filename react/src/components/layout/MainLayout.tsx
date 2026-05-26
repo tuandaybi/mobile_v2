@@ -6,6 +6,7 @@ import AppFooter from './AppFooter';
 import MobileModal from '../modal/MobileModal';
 import ServiceModal from '../modal/ServiceModal';
 import SellMobileModal from '../modal/SellMobileModal';
+import ExpenseModal from '../modal/ExpenseModal';
 import api from '../../../axiosConfig';
 import { useNavigate } from 'react-router-dom';
 
@@ -57,6 +58,7 @@ const MainLayout: React.FC<Props> = ({ children }) => {
         <MobileModal />
         <ServiceModal />
         <SellMobileModal />
+        <ExpenseModal />
 
         <Content style={{background: '#C0C0C0', padding: 40 }}>
           {children}

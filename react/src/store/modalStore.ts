@@ -55,11 +55,13 @@ type ModalSlice<T = AnyRec> = {
 type ModalState = {
   mobilesVersion: number;
   servicesVersion: number;
+  expensesVersion: number;
 
   // cũ
   mobile: ModalSlice;
   sellMobile: ModalSlice;
   service: ModalSlice;
+  expense: ModalSlice;
 
   // ====== NEW: công nợ ======
   debtDrawer: DebtDrawerSlice;
@@ -68,6 +70,7 @@ type ModalState = {
 
   bumpMobilesVersion: () => void;
   bumpServicesVersion: () => void;
+  bumpExpensesVersion: () => void;
 };
 
 export const useModalStore = create<ModalState>((set) => {
@@ -99,6 +102,16 @@ export const useModalStore = create<ModalState>((set) => {
   const serviceClose: ModalSlice['close'] = () =>
     set((s) => ({
       service: { ...s.service, isOpen: false, isEdit: false, record: null },
+    }));
+
+  // expense
+  const expenseOpen: ModalSlice['open'] = (isEdit = false, record = null) =>
+    set((s) => ({
+      expense: { ...s.expense, isOpen: true, isEdit, record: record ? clone(record) : null },
+    }));
+  const expenseClose: ModalSlice['close'] = () =>
+    set((s) => ({
+      expense: { ...s.expense, isOpen: false, isEdit: false, record: null },
     }));
 
   // ====== NEW: debtDrawer ======
@@ -156,6 +169,7 @@ export const useModalStore = create<ModalState>((set) => {
     mobile:    { isOpen: false, isEdit: false, record: null, open: mobileOpen,  close: mobileClose  },
     sellMobile:{ isOpen: false, isEdit: false, record: null, open: sellOpen,    close: sellClose    },
     service:   { isOpen: false, isEdit: false, record: null, open: serviceOpen, close: serviceClose },
+    expense:   { isOpen: false, isEdit: false, record: null, open: expenseOpen, close: expenseClose },
 
     // NEW
     debtDrawer: { isOpen: false, customer: null, open: debtDrawerOpen, close: debtDrawerClose },
@@ -164,7 +178,9 @@ export const useModalStore = create<ModalState>((set) => {
 
     mobilesVersion: 0,
     servicesVersion: 0,
+    expensesVersion: 0,
     bumpMobilesVersion: () => set(s => ({ mobilesVersion: s.mobilesVersion + 1 })),
     bumpServicesVersion: () => set(s => ({ servicesVersion: s.servicesVersion + 1 })),
+    bumpExpensesVersion: () => set(s => ({ expensesVersion: s.expensesVersion + 1 })),
   };
 });

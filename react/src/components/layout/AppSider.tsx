@@ -23,6 +23,7 @@ import {
   AccountBookOutlined,
   NotificationOutlined,
   SettingOutlined,
+  WalletOutlined,
 } from '@ant-design/icons';
 
 const { Sider } = Layout;
@@ -36,6 +37,7 @@ const MENU_PERMISSIONS: Record<string, string> = {
   '/home': 'trangchinh',
   '/mobiles': 'dienthoai.xemmua',
   '/services': 'dichvu.xem',
+  '/expenses': 'chiphi.xem',
   '/debts': 'congno.xem',
   '/sold-products': 'dienthoai.xemban',
   '/check-imei': 'checkimei.xem',
@@ -103,6 +105,7 @@ const AppSider: React.FC<AppSiderProps> = ({ collapsed, onCollapse }) => {
         { key: '/home', icon: <DashboardOutlined />, label: 'Trang chính' },
         { key: '/mobiles', icon: <MobileOutlined />, label: 'Quản lý điện thoại' },
         { key: '/services', icon: <ToolOutlined />, label: 'Quản lý dịch vụ' },
+        { key: '/expenses', icon: <WalletOutlined />, label: 'Quản lý chi phí' },
         { key: '/debts', icon: <DollarOutlined />, label: 'Quản lý công nợ' },
         { key: '/sold-products', icon: <FileDoneOutlined />, label: 'Sản phẩm đã bán' },
         { key: '/check-imei', icon: <BarcodeOutlined />, label: 'Check thông tin SP' },

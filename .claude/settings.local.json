@@ -4,7 +4,11 @@
       "Bash(ssh tuanda@192.168.10.252 \"cd /mobile_v2 && git pull\")",
       "Bash(ssh tuanda@192.168.10.252 \"ls ~/ && ls /var/www/ 2>/dev/null || echo 'no /var/www'; ls /opt/ 2>/dev/null || echo 'no /opt'; ls /home/ 2>/dev/null\")",
       "Bash(ssh tuanda@192.168.10.252 \"cd ~/mobile_v2 && git pull\")",
-      "Bash(composer show *)"
+      "Bash(composer show *)",
+      "Bash(npx vite *)",
+      "Bash(git check-ignore *)",
+      "Bash(ssh *)",
+      "Bash(bash deploy.sh)"
     ]
   }
 }

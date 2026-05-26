@@ -9,6 +9,7 @@ const RenewPage = lazy(() => import('@/pages/auth/RenewPage'));
 const DashboardPage = lazy(() => import('@/pages/DashboardPage'));
 const Mobiles = lazy(() => import('@/pages/MobilesPage'));
 const Services = lazy(() => import('@/pages/ServicesPage'));
+const Expenses = lazy(() => import('@/pages/ExpensesPage'));
 const Debt = lazy(() => import('@/pages/DebtsPage'));
 const SoldProductsPage = lazy(() => import('@/pages/SoldProductsPage'));
 const CheckImeiPage = lazy(() => import('@/pages/CheckImeiPage'));
@@ -38,6 +39,7 @@ const Router: React.FC = () => {
           <Route path="/home" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
           <Route path="/mobiles" element={<ProtectedRoute><Mobiles /></ProtectedRoute>} />
           <Route path="/services" element={<ProtectedRoute><Services /></ProtectedRoute>} />
+          <Route path="/expenses" element={<ProtectedRoute><Expenses /></ProtectedRoute>} />
           <Route path="/debts" element={<ProtectedRoute><Debt /></ProtectedRoute>} />
           <Route path="/sold-products" element={<ProtectedRoute><SoldProductsPage /></ProtectedRoute>} />
           <Route path="/check-imei" element={<ProtectedRoute><CheckImeiPage /></ProtectedRoute>} />

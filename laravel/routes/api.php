@@ -1,9 +1,9 @@
 <?php
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\{
-    MobileInController, MobileOutController, PurchaseInvoiceController, 
+    MobileInController, MobileOutController, PurchaseInvoiceController,
     ServiceController, AuthController, DebtController, HomeController,
-    ReportController, InboxController, AppUpdateController
+    ReportController, InboxController, AppUpdateController, ExpenseController
 };
 use App\Http\Controllers\admin\{
     BackupController, CustomerController, DeviceController, 
@@ -63,6 +63,13 @@ Route::middleware(['auth:sanctum', 'token.expiry'])->group(function () {
     Route::post('/services', [ServiceController::class, 'store'])->middleware('permission:dichvu.them');
     Route::match(['put','patch'], '/services/{service}', [ServiceController::class, 'update'])->middleware('permission:dichvu.sua');
     Route::delete('/services/{service}', [ServiceController::class, 'destroy'])->middleware('permission:dichvu.xoa');
+
+    //Expenses
+    Route::get('/expenses', [ExpenseController::class, 'index'])->middleware('permission:chiphi.xem');
+    Route::get('/expenses/{expense}', [ExpenseController::class, 'show'])->middleware('permission:chiphi.xem');
+    Route::post('/expenses', [ExpenseController::class, 'store'])->middleware('permission:chiphi.them');
+    Route::match(['put','patch'], '/expenses/{expense}', [ExpenseController::class, 'update'])->middleware('permission:chiphi.sua');
+    Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware('permission:chiphi.xoa');
 
     //Debt
     Route::get('/debts/summary', [DebtController::class, 'summary'])->middleware('permission:congno.xem');

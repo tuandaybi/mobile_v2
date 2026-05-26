@@ -93,9 +93,32 @@ class ReportController extends Controller
                 'profit'  => (float) $r->profit,
             ])->values();
 
+        // EXPENSE
+        // Tổng chi phí chung của cửa hàng theo ngày (bảng expenses)
+        $expense = DB::table('expenses as e')
+            ->selectRaw("
+                YEAR(e.date)  as year,
+                MONTH(e.date) as month,
+                DAY(e.date)   as day,
+                SUM(COALESCE(e.amount, 0)) as amount
+            ")
+            ->where('e.store_id', $storeId)
+            ->whereIn(DB::raw('YEAR(e.date)'), $years)
+            ->whereIn(DB::raw('MONTH(e.date)'), $months)
+            ->groupBy('year', 'month', 'day')
+            ->orderBy('year')->orderBy('month')->orderBy('day')
+            ->get()
+            ->map(fn($r) => [
+                'year'   => (int) $r->year,
+                'month'  => (int) $r->month,
+                'day'    => (int) $r->day,
+                'amount' => (float) $r->amount,
+            ])->values();
+
         return response()->json([
             'phone'   => $phone,
             'service' => $service,
+            'expense' => $expense,
         ]);
     }
 
