@@ -344,9 +344,6 @@ const Expenses: React.FC = () => {
                   showSearch
                   optionFilterProp="label"
                 />
-                <Button type="primary" onClick={() => openExpense(false, null)}>
-                  + Thêm chi phí
-                </Button>
               </Space>
             }
             pagination={{

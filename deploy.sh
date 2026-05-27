@@ -98,8 +98,11 @@ ssh_run "
 
     docker compose pull --quiet 2>/dev/null || true
     docker compose up -d --build --remove-orphans
+
+    # Restart nginx để clear FastCGI upstream IP cache trỏ đến container laravel (IP đổi mỗi lần recreate)
+    docker compose restart nginx
 "
-ok "Containers đã được rebuild và chạy."
+ok "Containers đã được rebuild và chạy (đã restart nginx để refresh upstream)."
 
 # ------------------------------------------------------------
 # BƯỚC 4: Chạy các lệnh Laravel

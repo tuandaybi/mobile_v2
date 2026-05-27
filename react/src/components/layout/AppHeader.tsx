@@ -9,6 +9,7 @@ import {
   PlusCircleOutlined,
   MobileOutlined,
   MoneyCollectOutlined,
+  WalletOutlined,
 } from "@ant-design/icons";
 import ProfileDrawer from '@/components/auth/ProfileDrawer';
 import NotificationDropdown from '@/components/notifi/NotificationDropdown';
@@ -83,15 +84,22 @@ const AppHeader: React.FC<AppHeaderProps> = ({}) => {
       icon: <MoneyCollectOutlined />,
       label: "Thêm dịch vụ",
     },
+    {
+      key: "addExpense",
+      icon: <WalletOutlined />,
+      label: "Thêm chi phí",
+    },
   ];
 
-  const { mobile, service } = useModalStore();
+  const { mobile, service, expense } = useModalStore();
 
   const handleAddMenuClick = ({ key }: { key: string }) => {
     if (key === "addMobile") {
       mobile.open(false);
     } else if (key === "addService") {
       service.open(false);
+    } else if (key === "addExpense") {
+      expense.open(false);
     }
   };
 
