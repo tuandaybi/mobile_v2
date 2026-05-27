@@ -104,6 +104,15 @@ ssh_run "
     set -e
     cd '$VPS_PATH'
 
+    echo '→ Đợi MySQL ready...'
+    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if docker compose exec -T mysql mysqladmin ping -h localhost --silent 2>/dev/null; then
+            echo \"MySQL ready sau \${i} lần thử\"
+            break
+        fi
+        sleep 2
+    done
+
     echo '→ Migrate database...'
     docker compose exec -T laravel php artisan migrate --force
 
@@ -130,6 +139,10 @@ ok "Artisan commands hoàn tất."
 # ------------------------------------------------------------
 # KIỂM TRA NHANH
 # ------------------------------------------------------------
+log "Restart nginx_proxy_manager để fix cache IP upstream..."
+ssh_run "docker restart nginx_proxy_manager >/dev/null 2>&1 && sleep 3 || true"
+ok "NPM restarted."
+
 log "Kiểm tra trạng thái containers..."
 ssh_run "cd '$VPS_PATH' && docker compose ps"
 

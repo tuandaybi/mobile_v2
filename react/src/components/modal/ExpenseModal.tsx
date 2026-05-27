@@ -7,14 +7,19 @@ import api from '../../../axiosConfig';
 
 dayjs.extend(customParseFormat);
 
-type ExpenseCategory = 'fixed' | 'inventory' | 'other';
-
 interface FormValues {
-  category: ExpenseCategory;
+  category_id: number;
   name: string;
   amount: number;
   date: Dayjs;
   note?: string;
+}
+
+interface ExpenseCategoryOpt {
+  id: number;
+  name: string;
+  code?: string | null;
+  is_active?: boolean;
 }
 
 const parseNumber = ((v?: string) => {
@@ -38,23 +43,32 @@ const parseDate = (v?: unknown): Dayjs => {
 const toYMD = (v?: Dayjs | string | null) =>
   v ? (dayjs.isDayjs(v) ? v.format('YYYY-MM-DD') : dayjs(v).format('YYYY-MM-DD')) : null;
 
-const CATEGORY_OPTIONS = [
-  { value: 'fixed', label: 'Chi phí cố định' },
-  { value: 'inventory', label: 'Nhập hàng' },
-  { value: 'other', label: 'Khác' },
-];
-
 export default function ExpenseModal() {
   const modal = useModalStore(s => s.expense);
   const bumpExpensesVersion = useModalStore(s => s.bumpExpensesVersion);
 
   const [form] = Form.useForm<FormValues>();
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<ExpenseCategoryOpt[]>([]);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.get('/expense-categories');
+      const arr: ExpenseCategoryOpt[] = Array.isArray(res.data) ? res.data : [];
+      setCategories(arr.filter(c => c.is_active !== false));
+    } catch {
+      setCategories([]);
+    }
+  };
 
   const initialValues: Partial<FormValues> = useMemo(() => {
     const r: any = modal.record || {};
+    const catId =
+      r.category_id ??
+      r.category?.id ??
+      null;
     return {
-      category: (r.category as ExpenseCategory) ?? 'fixed',
+      category_id: catId ?? undefined,
       name: r.name ?? '',
       amount: Number(r.amount ?? 0),
       date: parseDate(r.date ?? ''),
@@ -64,6 +78,7 @@ export default function ExpenseModal() {
 
   useEffect(() => {
     if (!modal.isOpen) return;
+    fetchCategories();
     form.resetFields();
     form.setFieldsValue(initialValues as any);
   }, [modal.isOpen, modal.record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -72,7 +87,7 @@ export default function ExpenseModal() {
     setLoading(true);
     try {
       const payload = {
-        category: values.category,
+        category_id: Number(values.category_id),
         name: values.name.trim(),
         amount: Number(values.amount ?? 0),
         date: toYMD(values.date),
@@ -118,10 +133,15 @@ export default function ExpenseModal() {
       >
         <Form.Item
           label="Loại chi phí"
-          name="category"
+          name="category_id"
           rules={[{ required: true, message: 'Chọn loại chi phí' }]}
         >
-          <Select options={CATEGORY_OPTIONS} />
+          <Select
+            placeholder="Chọn loại"
+            options={categories.map(c => ({ value: c.id, label: c.name }))}
+            showSearch
+            optionFilterProp="label"
+          />
         </Form.Item>
 
         <Form.Item

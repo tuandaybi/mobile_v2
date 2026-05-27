@@ -13,7 +13,7 @@ class Expense extends Model
     protected $table = 'expenses';
 
     protected $fillable = [
-        'store_id', 'user_id', 'category', 'name', 'amount', 'date', 'note',
+        'store_id', 'user_id', 'category_id', 'name', 'amount', 'date', 'note',
     ];
 
     protected $casts = [
@@ -23,4 +23,5 @@ class Expense extends Model
 
     public function store():    BelongsTo { return $this->belongsTo(Store::class, 'store_id'); }
     public function user():     BelongsTo { return $this->belongsTo(User::class, 'user_id'); }
+    public function category(): BelongsTo { return $this->belongsTo(ExpenseCategory::class, 'category_id'); }
 }

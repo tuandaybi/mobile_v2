@@ -22,11 +22,11 @@ class ExpenseStoreRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'category' => ['required', 'in:fixed,inventory,other'],
-            'name'     => ['required', 'string', 'max:255'],
-            'amount'   => ['required', 'numeric', 'min:0'],
-            'date'     => ['required', 'date'],
-            'note'     => ['nullable', 'string'],
+            'category_id' => ['required', 'integer', 'exists:expense_categories,id'],
+            'name'        => ['required', 'string', 'max:255'],
+            'amount'      => ['required', 'numeric', 'min:0'],
+            'date'        => ['required', 'date'],
+            'note'        => ['nullable', 'string'],
         ];
     }
 }

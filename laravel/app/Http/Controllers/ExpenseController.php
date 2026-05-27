@@ -17,19 +17,14 @@ class ExpenseController extends Controller
     use ResolvesStore;
     use IndexHelpers;
 
-    private const CATEGORY_LABELS = [
-        'fixed'     => 'Cố định',
-        'inventory' => 'Nhập hàng',
-        'other'     => 'Khác',
-    ];
-
     public function index(Request $r)
     {
         $storeId = $this->resolveStoreId($r);
 
         $q = Expense::query()
-            ->with(['user:id,name'])
+            ->with(['user:id,name', 'category:id,name,code'])
             ->leftJoin('users as u', 'u.id', '=', 'expenses.user_id')
+            ->leftJoin('expense_categories as ec', 'ec.id', '=', 'expenses.category_id')
             ->where('expenses.store_id', $storeId)
             ->select('expenses.*');
 
@@ -37,18 +32,19 @@ class ExpenseController extends Controller
             'expenses.name',
             'expenses.note',
             'u.name',
+            'ec.name',
         ]);
 
         if ($f = $r->input('date_from')) $q->whereDate('expenses.date', '>=', $f);
         if ($t = $r->input('date_to'))   $q->whereDate('expenses.date', '<=', $t);
-        if ($r->filled('category'))      $q->where('expenses.category', $r->input('category'));
+        if ($r->filled('category_id'))   $q->where('expenses.category_id', $r->input('category_id'));
 
         $sortMap = [
             'id'        => 'expenses.id',
             'name'      => 'expenses.name',
             'amount'    => 'expenses.amount',
             'date'      => 'expenses.date',
-            'category'  => 'expenses.category',
+            'category'  => 'ec.name',
             'user_name' => 'u.name',
         ];
         $this->applySort($q, $r, $sortMap, 'date', 'desc');
@@ -71,8 +67,9 @@ class ExpenseController extends Controller
 
         $expense = DB::transaction(function () use ($data, $storeId, $userId) {
             $expense = Expense::create($data);
+            $expense->load('category:id,name,code');
 
-            $catLabel = self::CATEGORY_LABELS[$expense->category] ?? $expense->category;
+            $catLabel = $expense->category->name ?? '';
             $amountFmt = number_format((float) $expense->amount) . 'đ';
 
             TelegramNotification::send(
@@ -103,7 +100,7 @@ class ExpenseController extends Controller
             return $expense;
         });
 
-        return (new ExpenseResource($expense->load('user:id,name')))
+        return (new ExpenseResource($expense->load(['user:id,name', 'category:id,name,code'])))
             ->additional(['message' => 'Tạo chi phí thành công'])
             ->response()
             ->setStatusCode(201);
@@ -112,7 +109,7 @@ class ExpenseController extends Controller
     public function show(Request $r, $id)
     {
         $storeId = $this->resolveStoreId($r);
-        $expense = Expense::with('user:id,name')
+        $expense = Expense::with(['user:id,name', 'category:id,name,code'])
             ->where('store_id', $storeId)
             ->findOrFail($id);
 
@@ -135,8 +132,9 @@ class ExpenseController extends Controller
 
         DB::transaction(function () use ($expense, $data, $storeId, $userId) {
             $expense->update($data);
+            $expense->load('category:id,name,code');
 
-            $catLabel = self::CATEGORY_LABELS[$expense->category] ?? $expense->category;
+            $catLabel = $expense->category->name ?? '';
             $amountFmt = number_format((float) $expense->amount) . 'đ';
 
             TelegramNotification::send(
@@ -165,7 +163,7 @@ class ExpenseController extends Controller
             }
         });
 
-        return new ExpenseResource($expense->fresh()->load('user:id,name'));
+        return new ExpenseResource($expense->fresh()->load(['user:id,name', 'category:id,name,code']));
     }
 
     public function destroy(Request $r, $id)
@@ -173,10 +171,12 @@ class ExpenseController extends Controller
         $storeId = $this->resolveStoreId($r);
         $userId  = $r->user()->id;
 
-        $expense = Expense::where('store_id', $storeId)->findOrFail($id);
+        $expense = Expense::with('category:id,name,code')
+            ->where('store_id', $storeId)
+            ->findOrFail($id);
 
         DB::transaction(function () use ($expense, $storeId, $userId) {
-            $catLabel = self::CATEGORY_LABELS[$expense->category] ?? $expense->category;
+            $catLabel = $expense->category->name ?? '';
             $amountFmt = number_format((float) $expense->amount) . 'đ';
 
             TelegramNotification::send(

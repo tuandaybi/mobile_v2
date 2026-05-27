@@ -8,11 +8,16 @@ import api from "../../axiosConfig";
 import { useModalStore } from "../store/modalStore";
 import PageTable from "@/components/shared/PageTable";
 
-type ExpenseCategory = "fixed" | "inventory" | "other";
+type ExpenseCategoryRef = {
+  id: number;
+  name: string;
+  code?: string | null;
+};
 
 type Expense = {
   id: number;
-  category: ExpenseCategory;
+  category_id: number;
+  category: ExpenseCategoryRef | null;
   name: string;
   amount: number;
   date: string;
@@ -27,15 +32,25 @@ const toNum = (v: any) => {
   return Number.isFinite(n) ? n : 0;
 };
 
-const CATEGORY_LABEL: Record<ExpenseCategory, { label: string; color: string }> = {
-  fixed: { label: "Cố định", color: "blue" },
-  inventory: { label: "Nhập hàng", color: "orange" },
-  other: { label: "Khác", color: "default" },
+const tagColorFor = (code?: string | null): string => {
+  switch (code) {
+    case "fixed":
+      return "blue";
+    case "inventory":
+      return "orange";
+    case "other":
+      return "default";
+    default:
+      return "geekblue";
+  }
 };
 
 const normalizeExpense = (r: any): Expense => ({
   id: Number(r.id),
-  category: (r.category as ExpenseCategory) ?? "other",
+  category_id: Number(r.category_id ?? r.category?.id ?? 0),
+  category: r.category
+    ? { id: Number(r.category.id), name: r.category.name ?? "", code: r.category.code ?? null }
+    : null,
   name: r.name ?? "",
   amount: toNum(r.amount),
   date: r.date ?? r.created_at ?? "",
@@ -92,6 +107,7 @@ const Expenses: React.FC = () => {
 
   const [rows, setRows] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState<ExpenseCategoryRef[]>([]);
 
   const [page, setPage] = useState(1);
   const [perPage, setPerPage] = useState(14);
@@ -100,7 +116,7 @@ const Expenses: React.FC = () => {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [searchText, setSearchText] = useState("");
 
-  const [filterCategory, setFilterCategory] = useState<ExpenseCategory | undefined>(undefined);
+  const [filterCategoryId, setFilterCategoryId] = useState<number | undefined>(undefined);
   const [dateFrom, setDateFrom] = useState<string | undefined>(undefined);
   const [dateTo, setDateTo] = useState<string | undefined>(undefined);
 
@@ -108,13 +124,24 @@ const Expenses: React.FC = () => {
     switch (field) {
       case "userName":
         return "user_name";
+      case "categoryName":
+        return "category";
       case "name":
       case "amount":
       case "date":
-      case "category":
         return field as any;
       default:
         return "date";
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const res = await api.get("/expense-categories");
+      const arr: any[] = Array.isArray(res.data) ? res.data : [];
+      setCategories(arr.map((c) => ({ id: Number(c.id), name: c.name ?? "", code: c.code ?? null })));
+    } catch {
+      setCategories([]);
     }
   };
 
@@ -124,7 +151,7 @@ const Expenses: React.FC = () => {
     nextPerPage = perPage,
     nextSortBy = sortBy,
     nextSortDir = sortDir,
-    nextCategory = filterCategory,
+    nextCategoryId = filterCategoryId,
     nextDateFrom = dateFrom,
     nextDateTo = dateTo,
   ) => {
@@ -138,7 +165,7 @@ const Expenses: React.FC = () => {
       };
       const q = (keyword ?? "").trim();
       if (q) params.q = q;
-      if (nextCategory) params.category = nextCategory;
+      if (nextCategoryId) params.category_id = nextCategoryId;
       if (nextDateFrom) params.date_from = nextDateFrom;
       if (nextDateTo) params.date_to = nextDateTo;
 
@@ -172,6 +199,10 @@ const Expenses: React.FC = () => {
   };
 
   useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  useEffect(() => {
     fetchExpenses();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [expensesVersion]);
@@ -179,11 +210,11 @@ const Expenses: React.FC = () => {
   const handleSearch = (value: string) => {
     setSearchText(value);
     setPage(1);
-    fetchExpenses(value, 1, perPage, sortBy, sortDir, filterCategory, dateFrom, dateTo);
+    fetchExpenses(value, 1, perPage, sortBy, sortDir, filterCategoryId, dateFrom, dateTo);
   };
 
-  const handleCategoryChange = (val?: ExpenseCategory) => {
-    setFilterCategory(val);
+  const handleCategoryChange = (val?: number) => {
+    setFilterCategoryId(val);
     setPage(1);
     fetchExpenses(searchText, 1, perPage, sortBy, sortDir, val, dateFrom, dateTo);
   };
@@ -194,7 +225,7 @@ const Expenses: React.FC = () => {
     setDateFrom(from);
     setDateTo(to);
     setPage(1);
-    fetchExpenses(searchText, 1, perPage, sortBy, sortDir, filterCategory, from, to);
+    fetchExpenses(searchText, 1, perPage, sortBy, sortDir, filterCategoryId, from, to);
   };
 
   const onEdit = (record: Expense) => {
@@ -220,12 +251,11 @@ const Expenses: React.FC = () => {
     () => [
       {
         title: "Loại",
-        dataIndex: "category",
-        key: "category",
+        key: "categoryName",
         sorter: true,
-        render: (c: ExpenseCategory) => {
-          const meta = CATEGORY_LABEL[c] ?? CATEGORY_LABEL.other;
-          return <Tag color={meta.color}>{meta.label}</Tag>;
+        render: (_: any, r: Expense) => {
+          if (!r.category) return "-";
+          return <Tag color={tagColorFor(r.category.code)}>{r.category.name}</Tag>;
         },
         sortOrder: sortBy === "category" ? (sortDir === "asc" ? "ascend" : "descend") : null,
       },
@@ -307,14 +337,12 @@ const Expenses: React.FC = () => {
                 <Select
                   allowClear
                   placeholder="Lọc loại"
-                  style={{ width: 160 }}
-                  value={filterCategory}
+                  style={{ width: 180 }}
+                  value={filterCategoryId}
                   onChange={handleCategoryChange}
-                  options={[
-                    { value: "fixed", label: "Cố định" },
-                    { value: "inventory", label: "Nhập hàng" },
-                    { value: "other", label: "Khác" },
-                  ]}
+                  options={categories.map((c) => ({ value: c.id, label: c.name }))}
+                  showSearch
+                  optionFilterProp="label"
                 />
                 <Button type="primary" onClick={() => openExpense(false, null)}>
                   + Thêm chi phí
@@ -345,7 +373,7 @@ const Expenses: React.FC = () => {
               setPerPage(nextPerPage);
               setSortBy(nextSortBy);
               setSortDir(nextSortDir);
-              fetchExpenses(searchText, nextPage, nextPerPage, nextSortBy, nextSortDir, filterCategory, dateFrom, dateTo);
+              fetchExpenses(searchText, nextPage, nextPerPage, nextSortBy, nextSortDir, filterCategoryId, dateFrom, dateTo);
             }}
           />
         </Col>

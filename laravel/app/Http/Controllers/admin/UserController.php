@@ -132,6 +132,7 @@ class UserController extends Controller
             'chiphi.them',
             'chiphi.sua',
             'chiphi.xoa',
+            'admin.chiphi',
             'congno.xem',
             'congno.them',
             'congno.sua',

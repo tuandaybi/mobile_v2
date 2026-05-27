@@ -6,9 +6,10 @@ use App\Http\Controllers\{
     ReportController, InboxController, AppUpdateController, ExpenseController
 };
 use App\Http\Controllers\admin\{
-    BackupController, CustomerController, DeviceController, 
-    DeviceStorageController, ColorController, StoreController, 
-    SupplierController, UserController, UserTokenController, SettingController
+    BackupController, CustomerController, DeviceController,
+    DeviceStorageController, ColorController, StoreController,
+    SupplierController, UserController, UserTokenController, SettingController,
+    ExpenseCategoryController
 };
 
 Route::get('/ping', fn() => response()->json(['ok' => true]));
@@ -71,6 +72,9 @@ Route::middleware(['auth:sanctum', 'token.expiry'])->group(function () {
     Route::match(['put','patch'], '/expenses/{expense}', [ExpenseController::class, 'update'])->middleware('permission:chiphi.sua');
     Route::delete('/expenses/{expense}', [ExpenseController::class, 'destroy'])->middleware('permission:chiphi.xoa');
 
+    //Expense categories (read for Select)
+    Route::get('/expense-categories', [ExpenseCategoryController::class, 'index'])->middleware('permission:chiphi.xem');
+
     //Debt
     Route::get('/debts/summary', [DebtController::class, 'summary'])->middleware('permission:congno.xem');
     Route::get('/debts/customer/{customer}', [DebtController::class, 'openDebtsByCustomer'])->middleware('permission:congno.xem');
@@ -121,6 +125,11 @@ Route::middleware(['auth:sanctum', 'token.expiry'])
 
         //Admin -> Colors
         Route::apiResource('colors', ColorController::class)->middleware('permission:admin.mausanpham');
+
+        //Admin -> Expense Categories
+        Route::apiResource('expense-categories', ExpenseCategoryController::class)
+            ->except(['show'])
+            ->middleware('permission:admin.chiphi');
 
 
 

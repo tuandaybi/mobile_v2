@@ -22,6 +22,7 @@ const AdminUsers = lazy(() => import('@/pages/admin/users'));
 const AdminCustomers = lazy(() => import('@/pages/admin/customers'));
 const AdminDevices = lazy(() => import('@/pages/admin/devices'));
 const AdminColors = lazy(() => import('@/pages/admin/colors'));
+const AdminExpenseCategories = lazy(() => import('@/pages/admin/expense-categories'));
 const AdminStores = lazy(() => import('@/pages/admin/stores'));
 const AdminNotifications = lazy(() => import('@/pages/admin/notifi'));
 const AdminBackups = lazy(() => import('@/pages/admin/backups'));
@@ -51,6 +52,7 @@ const Router: React.FC = () => {
           <Route path="/admin/stores" element={<ProtectedRoute><AdminStores /></ProtectedRoute>} />
           <Route path="/admin/devices" element={<ProtectedRoute><AdminDevices /></ProtectedRoute>} />
           <Route path="/admin/colors" element={<ProtectedRoute><AdminColors /></ProtectedRoute>} />
+          <Route path="/admin/expense-categories" element={<ProtectedRoute><AdminExpenseCategories /></ProtectedRoute>} />
           <Route path="/admin/notifications" element={<ProtectedRoute><AdminNotifications /></ProtectedRoute>} />
           <Route path="/admin/backups" element={<ProtectedRoute><AdminBackups /></ProtectedRoute>} />
           <Route path="/admin/settings" element={<ProtectedRoute><AdminSettings /></ProtectedRoute>} />
