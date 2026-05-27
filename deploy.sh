@@ -64,6 +64,12 @@ ssh_run "
     [ -f react/.env ] && cp react/.env \"\$TMP_BAK/react.env\"
     [ -f laravel/.env ] && cp laravel/.env \"\$TMP_BAK/laravel.env\"
 
+    # Chown storage + bootstrap/cache về user host (uid 1000) qua container nếu container đang chạy
+    # để 'git reset --hard' không bị Permission denied trên các file .gitignore
+    if docker compose ps laravel --status running 2>/dev/null | grep -q laravel; then
+        docker compose exec -T laravel chown -R 1000:1000 storage bootstrap/cache 2>/dev/null || true
+    fi
+
     git fetch origin
     git reset --hard origin/$GIT_BRANCH
     git clean -fd -e laravel/.env -e react/.env
