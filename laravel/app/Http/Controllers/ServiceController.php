@@ -332,14 +332,13 @@ class ServiceController extends Controller
             // ===== DEBT (chỉ bảng debts) =====
             if ($incomingDebt !== null) {
                 $customerId = $data['customer_id'] ?? $svc->customer_id;
+                $existing = Debt::withTrashed()->where('service_id', $svc->id)->first();
 
                 if ($incomingDebt > 0) {
                     // Chuẩn hoá ngày nợ
                     $debtDate = $r->filled('debt_date')
                         ? Carbon::parse($r->input('debt_date'))->toDateString()
                         : now(); // đổi ->toDateString() nếu cột 'date' là DATE
-                    // upsert theo service_id
-                    $existing = Debt::where('service_id', $svc->id)->first();
                     $payload = [
                         'customer_id' => $customerId,
                         'service_id'  => $svc->id,
@@ -349,10 +348,17 @@ class ServiceController extends Controller
                         'note'        => $r->input('debt_note') ?: ('Nợ phát sinh từ dịch vụ #' . $svc->id),
                     ];
 
-                    Debt::create($payload);
+                    if ($existing) {
+                        if ($existing->trashed()) $existing->restore();
+                        $existing->update($payload);
+                    } else {
+                        Debt::create($payload);
+                    }
                 } else {
                     // debt = 0 hoặc rỗng -> xoá nợ của service này (nếu có)
-                    Debt::where('service_id', $svc->id)->delete();
+                    if ($existing && !$existing->trashed()) {
+                        $existing->delete();
+                    }
                 }
             }
             //Tạo thông báo

@@ -450,22 +450,32 @@ class MobileOutController extends Controller
 
             // ===== DEBT (mỗi mobile_out_id tối đa 1 khoản nợ) =====
             if ($incomingDebt !== null) {
-                // Xoá nợ cũ theo mobile_out_id
-                Debt::where('mobileout_id', $sale->id)->delete();
+                $existing = Debt::withTrashed()->where('mobileout_id', $sale->id)->first();
 
                 if ($incomingDebt > 0) {
                     $debtDate = $r->filled('debt_date')
                         ? \Carbon\Carbon::parse($r->input('debt_date'))->toDateString()
                         : \Carbon\Carbon::now()->toDateString(); // nếu cột 'date' là DATE
 
-                    Debt::create([
-                        'customer_id'   => $data['customer_id'] ?? $sale->customer_id,
+                    $payload = [
+                        'customer_id'  => $data['customer_id'] ?? $sale->customer_id,
                         'mobileout_id' => $sale->id,
                         'user_id'      => $r->user() ? $r->user()->id : null,
-                        'debt'          => $incomingDebt,
-                        'date'          => $debtDate,
-                        'note'          => $r->input('debt_note') ?: ('Nợ phát sinh từ bán máy #' . $sale->id),
-                    ]);
+                        'debt'         => $incomingDebt,
+                        'date'         => $debtDate,
+                        'note'         => $r->input('debt_note') ?: ('Nợ phát sinh từ bán máy #' . $sale->id),
+                    ];
+
+                    if ($existing) {
+                        if ($existing->trashed()) $existing->restore();
+                        $existing->update($payload);
+                    } else {
+                        Debt::create($payload);
+                    }
+                } else {
+                    if ($existing && !$existing->trashed()) {
+                        $existing->delete();
+                    }
                 }
             }
 
