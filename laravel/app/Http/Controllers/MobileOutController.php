@@ -266,6 +266,7 @@ class MobileOutController extends Controller
             if ($refCol) {
                 $paidFromDebts = (int) DB::table('debts as d')
                     ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+                    ->whereNull('d.deleted_at')
                     ->where("d.$refCol", $sale->id)
                     ->selectRaw('COALESCE(SUM(p.amount),0) as paid')
                     ->value('paid');

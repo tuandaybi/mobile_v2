@@ -102,6 +102,7 @@ class DebtController extends Controller
         // Mỗi khoản nợ: principal, paid, remaining
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+            ->whereNull('d.deleted_at')
             ->selectRaw("
                 d.id,
                 d.customer_id,
@@ -190,6 +191,7 @@ class DebtController extends Controller
 
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+            ->whereNull('d.deleted_at')
             ->selectRaw(
                 "d.id,
                 d.note,
@@ -197,13 +199,13 @@ class DebtController extends Controller
                 d.`$principal` as amount,
                 COALESCE(SUM(p.amount),0) as paid,
                 (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining,
-                CASE 
+                CASE
                 WHEN d.mobileout_id IS NOT NULL THEN 'mobile'
                 WHEN d.service_id   IS NOT NULL THEN 'service'
                 ELSE 'unknown'
                 END as origin_type,
                 COALESCE(d.mobileout_id, d.service_id, NULL) as origin_id,
-                CASE 
+                CASE
                 WHEN d.mobileout_id IS NOT NULL THEN CONCAT('Bán máy - #', d.mobileout_id)
                 WHEN d.service_id   IS NOT NULL THEN CONCAT('Dịch vụ - #', d.service_id)
                 ELSE '—'
@@ -285,6 +287,7 @@ class DebtController extends Controller
         $row = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
             ->join('customers as c', 'c.id', '=', 'd.customer_id')
+            ->whereNull('d.deleted_at')
             ->selectRaw("
                 d.id,
                 d.customer_id,
@@ -379,6 +382,7 @@ class DebtController extends Controller
         // Tính remaining cho từng debt (dùng subquery để gọn và tránh ONLY_FULL_GROUP_BY)
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+            ->whereNull('d.deleted_at')
             ->selectRaw(
                 "d.id,
                 d.paid_amount,
@@ -457,6 +461,7 @@ class DebtController extends Controller
         // ✅ Kiểm tra debt thuộc customer nào và customer thuộc store hiện tại
         $debtRow = DB::table('debts as d')
             ->join('customers as c', 'c.id', '=', 'd.customer_id')
+            ->whereNull('d.deleted_at')
             ->where('d.id', $debt)
             ->where('c.store_id', $storeId)
             ->select('d.id')

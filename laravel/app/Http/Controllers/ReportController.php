@@ -186,6 +186,7 @@ class ReportController extends Controller
 
         $perDebt = DB::table('debts as d')
             ->leftJoin('debt_payments as p', 'p.debt_id', '=', 'd.id')
+            ->whereNull('d.deleted_at')
             ->selectRaw(
                 "d.id,
                 d.note,
@@ -193,13 +194,13 @@ class ReportController extends Controller
                 d.`$principal` as amount,
                 COALESCE(SUM(p.amount),0) as paid,
                 (d.`$principal` - COALESCE(SUM(p.amount),0)) as remaining,
-                CASE 
+                CASE
                 WHEN d.mobileout_id IS NOT NULL THEN 'mobile'
                 WHEN d.service_id   IS NOT NULL THEN 'service'
                 ELSE 'unknown'
                 END as origin_type,
                 COALESCE(d.mobileout_id, d.service_id, NULL) as origin_id,
-                CASE 
+                CASE
                 WHEN d.mobileout_id IS NOT NULL THEN CONCAT('Bán máy - #', d.mobileout_id)
                 WHEN d.service_id   IS NOT NULL THEN CONCAT('Dịch vụ - #', d.service_id)
                 ELSE '—'
