@@ -39,6 +39,9 @@ CURRENT_BRANCH=$(git -C "$(dirname "$0")" rev-parse --abbrev-ref HEAD 2>/dev/nul
 if [[ -z "$CURRENT_BRANCH" ]]; then
     warn "Không phát hiện git repo ở thư mục này. Bỏ qua bước push."
 else
+    # Bỏ qua mode-bit changes (do Docker chown gây ra trên VPS)
+    git -C "$(dirname "$0")" config core.filemode false
+
     git -C "$(dirname "$0")" add -A
     if git -C "$(dirname "$0")" diff --cached --quiet; then
         warn "Không có thay đổi mới để commit."
