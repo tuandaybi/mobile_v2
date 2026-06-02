@@ -103,6 +103,35 @@ export default function ServiceModal() {
     form.setFieldsValue(initialValues as any);
   }, [modal.isOpen, modal.record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Khi SỬA: fetch chi tiết từ /services/{id} để lấy debt mới nhất từ BE
+  useEffect(() => {
+    if (!modal.isOpen || !modal.isEdit || !modal.record?.id) return;
+    let alive = true;
+    (async () => {
+      try {
+        const res = await api.get(`/services/${modal.record!.id}`);
+        if (!alive) return;
+        const d = res.data || {};
+        form.setFieldsValue({
+          service_name:  d.service_name ?? d.name ?? form.getFieldValue('service_name'),
+          customer_id:   d.customer_id ?? null,
+          customer_name: d.customer_name ?? form.getFieldValue('customer_name'),
+          phone_number:  d.phone_number ?? d.customer_phone ?? form.getFieldValue('phone_number'),
+          service_price: Number(d.service_price ?? d.price ?? form.getFieldValue('service_price') ?? 0),
+          expense:       Number(d.expense ?? form.getFieldValue('expense') ?? 0),
+          debt:          Number(d.debt ?? 0),
+          service_date:  parseServiceDate(d.service_date ?? d.date ?? form.getFieldValue('service_date')),
+          warranty:      Number(d.warranty ?? form.getFieldValue('warranty') ?? 0),
+          note:          d.note ?? form.getFieldValue('note') ?? '',
+        });
+        if (d.customer_id) setIsExistingCustomer(true);
+      } catch (e) {
+        console.error('fetch service detail failed', e);
+      }
+    })();
+    return () => { alive = false; };
+  }, [modal.isOpen, modal.isEdit, modal.record?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
 
   // ===== Customer search (giống MobileModal) =====
   const fetchCustomers = async (q: string) => {
