@@ -1,6 +1,7 @@
 <?php
 namespace App\Http\Resources;
 
+use App\Models\Debt;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -16,6 +17,7 @@ class ServiceResource extends JsonResource
             'service_date'  => (string) ($this->service_date ?? $this->created_at ?? ''),
             'warranty'      => (int) ($this->warranty ?? 0),
             'note'          => (string) ($this->note ?? ''),
+            'debt'          => (float) (Debt::where('service_id', $this->id)->sum('debt') ?? 0),
             // Quan hệ
             'customer'      => $this->whenLoaded('customer', function () {
                 return [

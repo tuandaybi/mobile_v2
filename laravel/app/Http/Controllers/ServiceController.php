@@ -215,17 +215,22 @@ class ServiceController extends Controller
     {
         $s = Service::with(['customer', 'user'])->findOrFail($id);
 
+        // Số nợ thực tế từ bảng debts (cho form sửa "Nợ lại")
+        $debtAmount = (float) (Debt::where('service_id', $s->id)->sum('debt') ?? 0);
+
         // tuỳ schema thực tế, map về payload FE đang đọc
         return response()->json([
             'id'            => $s->id,
             'service_name'  => $s->service_name ?? $s->name,
+            'customer_id'   => $s->customer_id,
             'customer_name' => optional($s->customer)->name,
+            'phone_number'  => optional($s->customer)->phone,
             'user_name'     => optional($s->user)->name,
             'service_date'  => $s->service_date ?? $s->created_at,
             'service_price' => (int) ($s->service_price ?? $s->price ?? $s->amount),
             'expense'       => (int) ($s->expense ?? 0),
             'paid'          => (int) ($s->paid ?? $s->payment_total ?? 0),
-            'debt'          => max(0, (int) ($s->service_price ?? $s->price ?? $s->amount) - (int) ($s->paid ?? 0)),
+            'debt'          => $debtAmount,
             'warranty'      => (int) ($s->warranty ?? 0),
             'note'          => $s->note,
         ]);
@@ -332,22 +337,22 @@ class ServiceController extends Controller
             // ===== DEBT (chỉ bảng debts) =====
             if ($incomingDebt !== null) {
                 $customerId = $data['customer_id'] ?? $svc->customer_id;
-                $existing = Debt::withTrashed()->where('service_id', $svc->id)->first();
 
                 if ($incomingDebt > 0) {
                     // Chuẩn hoá ngày nợ
                     $debtDate = $r->filled('debt_date')
                         ? Carbon::parse($r->input('debt_date'))->toDateString()
-                        : now(); // đổi ->toDateString() nếu cột 'date' là DATE
+                        : now();
                     $payload = [
                         'customer_id' => $customerId,
                         'service_id'  => $svc->id,
                         'user_id'     => $data['user_id'] ?? null,
-                        'debt'      => $incomingDebt,
-                        'date'      => $debtDate,
+                        'debt'        => $incomingDebt,
+                        'date'        => $debtDate,
                         'note'        => $r->input('debt_note') ?: ('Nợ phát sinh từ dịch vụ #' . $svc->id),
                     ];
 
+                    $existing = Debt::withTrashed()->where('service_id', $svc->id)->first();
                     if ($existing) {
                         if ($existing->trashed()) $existing->restore();
                         $existing->update($payload);
@@ -355,10 +360,8 @@ class ServiceController extends Controller
                         Debt::create($payload);
                     }
                 } else {
-                    // debt = 0 hoặc rỗng -> xoá nợ của service này (nếu có)
-                    if ($existing && !$existing->trashed()) {
-                        $existing->delete();
-                    }
+                    // debt = 0 -> soft-delete TẤT CẢ debts đang active của service này
+                    Debt::where('service_id', $svc->id)->delete();
                 }
             }
             //Tạo thông báo

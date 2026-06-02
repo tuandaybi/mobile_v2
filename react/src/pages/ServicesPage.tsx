@@ -18,6 +18,7 @@ type Service = {
   date: string;
   warranty: string;
   note?: string | null;
+  debt?: number;
 };
 
 const currency = (n: number) => `${Number(n || 0).toLocaleString()} đ`;
@@ -43,6 +44,7 @@ const normalizeService = (r: any): Service => ({
   date: r.service_date ?? r.date ?? r.created_at ?? "",
   warranty: warrantyLabel(r.warranty ?? r.warranty_months ?? r.warranty_month ?? 0),
   note: r.note ?? r.service_note ?? r.description ?? null,
+  debt: toNum(r.debt ?? 0),
 });
 
 // Helper: lấy phần tử "cuối cùng khác null/undefined" từ mảng (hỗ trợ ES2020)
