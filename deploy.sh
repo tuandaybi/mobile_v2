@@ -49,6 +49,15 @@ else
         git -C "$(dirname "$0")" commit -m "deploy: $(date '+%Y-%m-%d %H:%M:%S')"
         ok "Đã commit."
     fi
+
+    # Đồng bộ với remote trước khi push (tránh non-fast-forward)
+    git -C "$(dirname "$0")" fetch origin "$GIT_BRANCH"
+    if ! git -C "$(dirname "$0")" pull --rebase origin "$GIT_BRANCH"; then
+        warn "Rebase fail. Reset local về remote và bỏ commit local rác."
+        git -C "$(dirname "$0")" rebase --abort 2>/dev/null || true
+        git -C "$(dirname "$0")" reset --hard "origin/$GIT_BRANCH"
+    fi
+
     git -C "$(dirname "$0")" push origin "$GIT_BRANCH"
     ok "Đã push branch '$GIT_BRANCH'."
 fi
