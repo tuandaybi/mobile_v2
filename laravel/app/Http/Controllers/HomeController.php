@@ -158,17 +158,19 @@ class HomeController extends Controller
             ->where('c.store_id', $storeId)
             ->count();
 
-        /* Tổng nợ gốc (theo khách thuộc store) */
+        /* Tổng nợ gốc (theo khách thuộc store, bỏ qua debt đã soft-delete) */
         $totalDebt = (float) DB::table($tblDebt.' as d')
             ->join($tblCus.' as c', 'c.id', '=', 'd.customer_id')
+            ->whereNull('d.deleted_at')
             ->where('c.store_id', $storeId)
             ->selectRaw('COALESCE(SUM(d.debt),0) as total_debt')
             ->value('total_debt');
 
-        /* Tổng tiền đã trả (join payments → debts → customers) */
+        /* Tổng tiền đã trả (join payments → debts → customers, bỏ qua debt đã soft-delete) */
         $totalPaid = (float) DB::table($tblPay.' as p')
             ->join($tblDebt.' as d', 'd.id', '=', 'p.debt_id')
             ->join($tblCus.' as c', 'c.id', '=', 'd.customer_id')
+            ->whereNull('d.deleted_at')
             ->where('c.store_id', $storeId)
             ->selectRaw('COALESCE(SUM(p.amount),0) as total_paid') // nếu cột là paid_amount thì đổi ở đây
             ->value('total_paid');
