@@ -279,6 +279,9 @@ class MobileOutController extends Controller
 
         $debt = max(0, $salePrice - $paid);
 
+        // Số nợ gốc trên bảng debts (cho form sửa "Nợ lại")
+        $debtAmount = (float) (Debt::where('mobileout_id', $sale->id)->value('debt') ?? 0);
+
         // 4) Items: hiển thị thông tin máy từ mobileIn, NHƯNG price lấy từ MOBILE_OUT
         $items = [];
         if ($sale->mobileIn) {
@@ -314,6 +317,7 @@ class MobileOutController extends Controller
             'subtotal'      => $salePrice,       // FE sẽ đọc subtotal/total/amount — ở đây trả về subtotal
             'paid'          => $paid,
             'debt'          => $debt,
+            'debt_amount'   => $debtAmount,
             'expense'      => $exspense,
             'date'          => $date,
             'warranty'     => $warranty,
